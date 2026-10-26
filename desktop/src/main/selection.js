@@ -5,7 +5,9 @@ const { clipboard } = require('electron');
 const { log } = require('./log');
 const clip = require('./clipboard');
 
-// Bridge to native/selection-helper.ps1 (see that file for what it does).
+// Bridge to the native helper (native/selection-helper.cs, which documents
+// the protocol). Runs the compiled IntelliPointerHelper.exe when available;
+// falls back to compiling the same source in PowerShell.
 // Emits:
 //   'selection' { text, x, y }  user finished selecting text in another app (physical px)
 //   'down'      { x, y }        left mouse button pressed anywhere (physical px)
@@ -21,22 +23,34 @@ let startedAt = 0;
 const waiters = new Map(); // id -> { resolve, timer }
 let lastSelection = { text: '', at: 0 }; // most recent mouse selection seen by the hook
 
-function helperPath() {
-  // Tests substitute a fake helper that speaks the same protocol (no mouse hook).
-  if (process.env.IP_SELECTION_HELPER_TEST) return process.env.IP_SELECTION_HELPER_TEST;
-  // In a packaged app the script is unpacked next to app.asar so PowerShell can read it.
-  return path.join(__dirname, 'native', 'selection-helper.ps1').replace('app.asar', 'app.asar.unpacked');
+// Returns [command, args, kind] for the best available helper.
+function helperCommand() {
+  const ps = (script) => [
+    // ExecutionPolicy Bypass applies to this one child process only; no system setting changes.
+    'powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, String(process.pid)], 'powershell',
+  ];
+  // Tests substitute a stand-in that speaks the same protocol (no mouse hook).
+  if (process.env.IP_SELECTION_HELPER_TEST) return ps(process.env.IP_SELECTION_HELPER_TEST);
+  // Installed app: the exe is built by scripts/install-app.mjs.
+  const shipped = path.join(__dirname, 'native', 'IntelliPointerHelper.exe');
+  if (require('node:fs').existsSync(shipped)) return [shipped, [String(process.pid)], 'exe'];
+  // Running from source: compile once and cache.
+  try {
+    return [require('../../scripts/build-helper').ensureCached(), [String(process.pid)], 'exe'];
+  } catch (err) {
+    log('helper.build_error', { error: err.message.slice(0, 300) });
+  }
+  return ps(path.join(__dirname, 'native', 'selection-helper.ps1'));
 }
 
 function start() {
   if (process.platform !== 'win32' || child) return;
   startedAt = Date.now();
-  // ExecutionPolicy Bypass applies to this one child process only; no system setting changes.
-  child = spawn(
-    'powershell.exe',
-    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helperPath(), String(process.pid)],
-    { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] },
-  );
+  const [command, args, kind] = helperCommand();
+  // Automated tests run the real helper without its system-wide mouse hook.
+  if (process.env.IP_HELPER_NO_HOOK === '1' && kind === 'exe') args.push('--no-hook');
+  log('helper.start', { kind });
+  child = spawn(command, args, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   // Lines can be large (a screenshot is ~11 MB of base64), so split on raw
   // bytes and only ever scan each new chunk once.
   let pending = [];

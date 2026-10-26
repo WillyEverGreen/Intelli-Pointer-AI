@@ -5,12 +5,13 @@
 const path = require('node:path');
 const { app, ipcMain, BrowserWindow } = require('electron');
 
-// Real BitBlt grabs through a hook-free stand-in for the selection helper.
-process.env.IP_SELECTION_HELPER_TEST = path.join(__dirname, 'fixtures', 'fake-selection-helper.ps1');
+// Real BitBlt grabs through the real compiled helper, minus its mouse hook.
+process.env.IP_HELPER_NO_HOOK = '1';
 
 app.setPath('userData', path.join(require('node:os').tmpdir(), `intellipointer-capture-test-${process.pid}`));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
+if (process.env.IP_GPU === 'off') app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   const failures = [];
   const check = (cond, msg) => {

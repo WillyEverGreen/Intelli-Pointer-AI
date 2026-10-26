@@ -20,6 +20,9 @@ const DEFAULTS = {
   captureHotkey: 'CommandOrControl+Shift+Space',
   clipboardHotkey: 'CommandOrControl+Shift+X',
   selectionBubble: true,
+  // GPU acceleration costs ~100-150 MB for a GPU process; the UI is simple
+  // enough to render in software at full speed. Takes effect after restart.
+  hardwareAcceleration: false,
   // Model sources. `models` is the user's chosen list: [{ id, vision }].
   providers: {
     cloud: { enabled: true },

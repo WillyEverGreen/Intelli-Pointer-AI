@@ -12,6 +12,14 @@ const selection = require('./selection');
 const secrets = require('./secrets');
 const providers = require('./providers');
 const { log, logFile } = require('./log');
+
+// Never show raw "JavaScript error in the main process" boxes: log the error
+// and keep running. (Startup syntax errors are caught by `npm run check`.)
+for (const event of ['uncaughtException', 'unhandledRejection']) {
+  process.on(event, (err) => {
+    log(`main.${event}`, { error: String(err?.message || err), stack: String(err?.stack || '').split(/\r?\n/).slice(0, 4).join(' | ') });
+  });
+}
 const clip = require('./clipboard');
 const { makeIcon } = require('./icon');
 
@@ -32,6 +40,9 @@ let pinned = true;
 app.commandLine.appendSwitch('disable-features', [
   'SpareRendererForSitePerProcess', 'MediaSessionService', 'HardwareMediaKeyHandling', 'Translate', 'AutofillServerCommunication',
 ].join(','));
+// Software rendering unless the user turns GPU acceleration on (saves ~100+ MB).
+if (process.env.IP_GPU !== 'on' && !settings.get().hardwareAcceleration) app.disableHardwareAcceleration();
+Menu.setApplicationMenu(null); // no default menu: less memory and startup work
 
 const SMOKE_TEST_OUT = (process.argv.find((a) => a.startsWith('--smoke-test=')) || '').slice('--smoke-test='.length);
 
@@ -524,6 +535,13 @@ async function runSmokeTest(outFile) {
   report.memoryMB = Math.round(metrics.reduce((sum, m) => sum + (m.memory?.workingSetSize || 0), 0) / 1024);
   report.idleCpuPercent = Math.round(metrics.reduce((sum, m) => sum + (m.cpu?.percentCPUUsage || 0), 0) * 10) / 10;
   report.processes = metrics.length;
+  const pageByPid = new Map(BrowserWindow.getAllWindows().map((w) => [w.webContents.getOSProcessId(), path.basename(w.webContents.getURL().split('?')[0])]));
+  report.breakdown = metrics.map((m) => ({
+    type: m.type === 'Tab' ? `renderer:${pageByPid.get(m.pid) || '?'}` : m.name ? `${m.type}:${m.name}` : m.type,
+    workingSetMB: Math.round((m.memory?.workingSetSize || 0) / 1024),
+    privateMB: Math.round((m.memory?.privateBytes || 0) / 1024),
+  }));
+  report.privateMB = report.breakdown.reduce((n, p) => n + p.privateMB, 0);
   check(`idle CPU ${report.idleCpuPercent}% (under 2%)`, report.idleCpuPercent < 2);
   report.build = buildInfo();
   require('node:fs').writeFileSync(outFile, JSON.stringify(report, null, 2));

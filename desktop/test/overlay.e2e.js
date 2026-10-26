@@ -44,6 +44,7 @@ async function key(wc, keyCode, modifiers = []) {
   await wait(50);
 }
 
+if (process.env.IP_GPU === 'off') app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   if (process.env.IP_THEME) nativeTheme.themeSource = process.env.IP_THEME; // light | dark
   fs.mkdirSync(outDir, { recursive: true });

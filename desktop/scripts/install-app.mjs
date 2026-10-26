@@ -33,6 +33,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // 1. Tests
 if (!args.has('--skip-tests')) {
+  step('Syntax check');
+  execSync('npm run check', { cwd: root, stdio: 'inherit' });
   step('Running unit tests');
   execSync('npm test', { cwd: root, stdio: 'inherit' });
   const electronBin = require('electron'); // path to the Electron executable
@@ -96,6 +98,11 @@ const [appPath] = await packager({
   quiet: true,
 });
 console.log(`  built ${appPath}`);
+
+// Native helper: compiled C# (~16 MB RAM) instead of a PowerShell host.
+const { build: buildHelper } = require('./build-helper.js');
+buildHelper(path.join(appPath, 'resources', 'app', 'src', 'main', 'native', 'IntelliPointerHelper.exe'));
+console.log('  built native helper');
 
 // Lighter install: Chromium ships ~55 UI language packs; the app is English-only.
 const localesDir = path.join(appPath, 'locales');
