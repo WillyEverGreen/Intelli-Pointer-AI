@@ -68,7 +68,13 @@ function cleanModels(list) {
   return list
     .filter((m) => m && typeof m.id === 'string' && m.id.length <= 200 && !seen.has(m.id) && seen.add(m.id))
     .slice(0, 300)
-    .map((m) => ({ id: m.id, vision: m.vision === true }));
+    .map((m) => ({
+      id: m.id,
+      vision: m.vision === true,
+      reasoning: m.reasoning === true,
+      // Last measured time to first token ("Test speed"), or null.
+      latencyMs: Number.isFinite(m.latencyMs) && m.latencyMs > 0 && m.latencyMs < 600000 ? Math.round(m.latencyMs) : null,
+    }));
 }
 
 function cleanProviders(current, patch) {

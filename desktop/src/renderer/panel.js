@@ -81,7 +81,7 @@
       }
       const o = document.createElement('option');
       o.value = m.id;
-      o.textContent = `${modelName(m)}${m.vision ? '' : ' (text only)'}`;
+      o.textContent = `${modelName(m)}${m.latencyMs ? ` · ${fmtSpeed(m.latencyMs)}` : ''}${m.vision ? '' : ' (text only)'}`;
       o.title = m.label;
       groups.get(m.group).appendChild(o);
     }
@@ -528,7 +528,22 @@
   function updateModelCount(p) {
     const rows = [...provDraft[p].rows.values()];
     const used = rows.filter((r) => r.use).length;
-    setProvStatus(p, rows.length ? `${used} of ${rows.length} models shown in the model menu.` : '');
+    const vision = rows.filter((r) => r.vision).length;
+    setProvStatus(p, rows.length ? `${used} of ${rows.length} models shown in the model menu · ${vision} can read images.` : '');
+  }
+
+  const fmtSpeed = (ms) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
+
+  // Ticked models first, then fastest measured, then by name.
+  function sortedIds(draft) {
+    return [...draft.rows.keys()].sort((a, b) => {
+      const ra = draft.rows.get(a);
+      const rb = draft.rows.get(b);
+      if (ra.use !== rb.use) return ra.use ? -1 : 1;
+      const la = ra.latencyMs ?? Infinity;
+      const lb = rb.latencyMs ?? Infinity;
+      return la !== lb ? la - lb : a.localeCompare(b);
+    });
   }
 
   function renderModelList(p) {
@@ -537,7 +552,7 @@
     const filter = role(p, 'filter').value.trim().toLowerCase();
     role(p, 'picker').hidden = draft.rows.size === 0;
     list.innerHTML = '';
-    const ids = [...draft.rows.keys()].filter((id) => id.toLowerCase().includes(filter));
+    const ids = sortedIds(draft).filter((id) => id.toLowerCase().includes(filter) && (!draft.visionOnly || draft.rows.get(id).vision));
     if (!ids.length && draft.rows.size) list.innerHTML = '<div class="model-empty">No models match.</div>';
     for (const id of ids) {
       const row = draft.rows.get(id);
@@ -557,10 +572,39 @@
       name.textContent = id;
       name.title = id;
       use.append(cb, name);
+
+      const tags = document.createElement('span');
+      tags.className = 'model-tags';
+      if (row.reasoning) {
+        const t = document.createElement('span');
+        t.className = 'tag';
+        t.textContent = 'reasoning';
+        t.title = 'Thinks before answering, so it is usually slower to start';
+        tags.appendChild(t);
+      }
+      if (row.testing || row.latencyMs || row.error) {
+        const sp = document.createElement('span');
+        sp.className = 'speed';
+        if (row.testing) {
+          sp.textContent = 'testing…';
+        } else if (row.error) {
+          sp.textContent = 'failed';
+          sp.classList.add('slow');
+          sp.title = row.error;
+        } else {
+          sp.textContent = fmtSpeed(row.latencyMs);
+          sp.classList.add(row.latencyMs < 1500 ? 'fast' : row.latencyMs < 4000 ? 'ok' : 'slow');
+          sp.title = 'Time until the first word of a reply (measured on this PC)';
+        }
+        tags.appendChild(sp);
+      }
+
       const vision = document.createElement('button');
       vision.type = 'button';
       vision.className = 'vision-toggle';
-      vision.title = 'Whether this model can read images (screen captures)';
+      vision.title = row.visionSource === 'server'
+        ? 'Image support as reported by the server (click to override)'
+        : 'Whether this model can read images (screen captures)';
       vision.setAttribute('aria-pressed', String(row.vision));
       vision.innerHTML = window.ipIcon('image', 12);
       vision.append('Images');
@@ -568,17 +612,54 @@
         row.vision = !row.vision;
         vision.setAttribute('aria-pressed', String(row.vision));
       });
-      el.append(use, vision);
+      el.append(use, tags, vision);
       list.appendChild(el);
     }
     updateModelCount(p);
+  }
+
+  // Measures time-to-first-word for the ticked models (or the visible ones
+  // if none are ticked), three at a time, then re-sorts fastest first.
+  async function testSpeeds(p) {
+    const draft = provDraft[p];
+    const btn = role(p, 'speed');
+    const filter = role(p, 'filter').value.trim().toLowerCase();
+    let ids = sortedIds(draft).filter((id) => draft.rows.get(id).use);
+    if (!ids.length) ids = sortedIds(draft).filter((id) => id.toLowerCase().includes(filter) && (!draft.visionOnly || draft.rows.get(id).vision)).slice(0, 8);
+    if (!ids.length) return;
+    btn.disabled = true;
+    const opts = { apiKey: role(p, 'key').value.trim() || undefined };
+    if (p === 'local') opts.baseUrl = role(p, 'url').value.trim();
+    for (const id of ids) Object.assign(draft.rows.get(id), { testing: true, error: null });
+    renderModelList(p);
+    const queue = [...ids];
+    const worker = async () => {
+      while (queue.length) {
+        const id = queue.shift();
+        const row = draft.rows.get(id);
+        const res = await window.ip.speedTest(p, id, opts).catch((err) => ({ ok: false, error: cleanErr(err) }));
+        Object.assign(row, { testing: false, latencyMs: res.ok ? res.firstTokenMs : null, error: res.ok ? null : res.error });
+        renderModelList(p);
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    btn.disabled = false;
+    const ok = ids.map((id) => [id, draft.rows.get(id)]).filter(([, r]) => r.latencyMs).sort((a, b) => a[1].latencyMs - b[1].latencyMs);
+    setProvStatus(p, ok.length
+      ? `Tested ${ids.length}. Fastest: ${ok[0][0]} (${fmtSpeed(ok[0][1].latencyMs)}). Save to order the model menu fastest first.`
+      : 'None of the tested models replied. Hover "failed" to see why.', !ok.length);
   }
 
   async function loadProviderSettings() {
     const status = await window.ip.providerStatus();
     $('s-cloudEnabled').checked = status.providers.cloud.enabled;
     for (const p of PROVS) {
-      provDraft[p] = { rows: new Map(status.providers[p].models.map((m) => [m.id, { use: true, vision: m.vision }])), removeKey: false };
+      provDraft[p] = {
+        rows: new Map(status.providers[p].models.map((m) => [m.id, { use: true, vision: m.vision, reasoning: m.reasoning, latencyMs: m.latencyMs }])),
+        removeKey: false,
+        visionOnly: false,
+      };
+      role(p, 'vision-only').setAttribute('aria-pressed', 'false');
       role(p, 'key').value = '';
       role(p, 'hint').textContent = status.keys[p].set ? `Saved ${status.keys[p].hint}` : '';
       role(p, 'remove').hidden = !status.keys[p].set;
@@ -600,6 +681,7 @@
   }
 
   // First load: tick a few sensible defaults so the model menu isn't empty.
+  // For servers that report capabilities (9Router), prefer fast vision models.
   function preselect(p, fetched) {
     const prefer = {
       gemini: [/^gemini-flash-latest$/, /^gemini-flash-lite-latest$/, /^gemini-pro-latest$/],
@@ -607,8 +689,12 @@
       local: [],
     }[p];
     let picked = fetched.filter((m) => prefer.some((re) => re.test(m.id)));
-    if (!picked.length) picked = fetched.filter((m) => m.vision).concat(fetched);
-    for (const m of picked.slice(0, 3)) provDraft[p].rows.get(m.id).use = true;
+    if (!picked.length) {
+      const quick = /fast|flash|mini|lite|haiku|scout|turbo|instant|small/i;
+      const score = (m) => (m.vision ? 4 : 0) + (m.reasoning ? 0 : 2) + (quick.test(m.id) ? 1 : 0);
+      picked = [...fetched].sort((a, b) => score(b) - score(a));
+    }
+    for (const m of picked.slice(0, 4)) provDraft[p].rows.get(m.id).use = true;
   }
 
   async function fetchProviderModels(p) {
@@ -622,15 +708,27 @@
       const draft = provDraft[p];
       const anyUsed = [...draft.rows.values()].some((r) => r.use);
       const merged = new Map();
-      for (const m of fetched) merged.set(m.id, draft.rows.get(m.id) || { use: false, vision: m.vision });
+      for (const m of fetched) {
+        const prev = draft.rows.get(m.id);
+        merged.set(m.id, {
+          use: prev?.use ?? false,
+          // The server's capability report wins over an earlier guess.
+          vision: m.visionSource === 'server' || !prev ? m.vision : prev.vision,
+          visionSource: m.visionSource,
+          reasoning: m.reasoning,
+          latencyMs: prev?.latencyMs ?? null,
+        });
+      }
       // Keep chosen models even if the server no longer lists them.
       for (const [id, row] of draft.rows) if (row.use && !merged.has(id)) merged.set(id, row);
       draft.rows = merged;
       if (!anyUsed) preselect(p, fetched);
       renderModelList(p);
       if (!fetched.length) setProvStatus(p, 'The server returned no chat models.', true);
+      return true;
     } catch (err) {
       setProvStatus(p, cleanErr(err), true);
+      return false;
     } finally {
       btn.disabled = false;
     }
@@ -640,9 +738,16 @@
     const patch = { cloud: { enabled: $('s-cloudEnabled').checked } };
     for (const p of PROVS) {
       const typed = role(p, 'key').value.trim();
-      patch[p] = { models: [...provDraft[p].rows].filter(([, r]) => r.use).map(([id, r]) => ({ id, vision: r.vision })) };
+      const draft = provDraft[p];
+      // Saved in speed order, so the model menu lists the fastest first.
+      patch[p] = {
+        models: sortedIds(draft).filter((id) => draft.rows.get(id).use).map((id) => {
+          const r = draft.rows.get(id);
+          return { id, vision: r.vision, reasoning: Boolean(r.reasoning), latencyMs: r.latencyMs ?? null };
+        }),
+      };
       if (typed) patch[p].apiKey = typed;
-      else if (provDraft[p].removeKey) patch[p].apiKey = '';
+      else if (draft.removeKey) patch[p].apiKey = '';
     }
     patch.local.baseUrl = role('local', 'url').value.trim();
     patch.local.label = role('local', 'label').value.trim();
@@ -728,6 +833,12 @@
   for (const p of PROVS) {
     role(p, 'load').addEventListener('click', () => fetchProviderModels(p));
     role(p, 'filter').addEventListener('input', () => renderModelList(p));
+    role(p, 'speed').addEventListener('click', () => testSpeeds(p));
+    role(p, 'vision-only').addEventListener('click', () => {
+      provDraft[p].visionOnly = !provDraft[p].visionOnly;
+      role(p, 'vision-only').setAttribute('aria-pressed', String(provDraft[p].visionOnly));
+      renderModelList(p);
+    });
     role(p, 'key').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') fetchProviderModels(p);
     });
@@ -739,10 +850,14 @@
     });
   }
   for (const b of pane('local').querySelectorAll('[data-preset]')) {
-    b.addEventListener('click', () => {
-      role('local', 'url').value = b.dataset.preset;
+    // A preset may list several URLs (9Router: production port, then dev port);
+    // the first one that answers is kept.
+    b.addEventListener('click', async () => {
       role('local', 'label').value = b.dataset.name;
-      fetchProviderModels('local');
+      for (const url of b.dataset.preset.split(' ')) {
+        role('local', 'url').value = url;
+        if (await fetchProviderModels('local')) return;
+      }
     });
   }
   $('clip-more').addEventListener('click', () => {

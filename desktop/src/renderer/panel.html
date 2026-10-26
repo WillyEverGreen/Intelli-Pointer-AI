@@ -96,7 +96,11 @@
         <div class="row"><button class="btn" data-role="load" data-icon="refresh-cw">Load models</button><button class="btn ghost" data-role="remove">Remove key</button></div>
         <p class="meta" data-role="status"></p>
         <div class="model-picker-list" data-role="picker" hidden>
-          <input class="input" data-role="filter" placeholder="Filter models" />
+          <div class="picker-tools">
+            <input class="input" data-role="filter" placeholder="Filter models" />
+            <button type="button" class="chip" data-role="vision-only" aria-pressed="false" title="Show only models that can read images">Images only</button>
+            <button type="button" class="chip" data-role="speed" title="Measure how fast the ticked models start answering">Test speed</button>
+          </div>
           <div class="model-list" data-role="list"></div>
         </div>
       </div>
@@ -109,7 +113,11 @@
         <div class="row"><button class="btn" data-role="load" data-icon="refresh-cw">Load models</button><button class="btn ghost" data-role="remove">Remove key</button></div>
         <p class="meta" data-role="status"></p>
         <div class="model-picker-list" data-role="picker" hidden>
-          <input class="input" data-role="filter" placeholder="Filter models" />
+          <div class="picker-tools">
+            <input class="input" data-role="filter" placeholder="Filter models" />
+            <button type="button" class="chip" data-role="vision-only" aria-pressed="false" title="Show only models that can read images">Images only</button>
+            <button type="button" class="chip" data-role="speed" title="Measure how fast the ticked models start answering">Test speed</button>
+          </div>
           <div class="model-list" data-role="list"></div>
         </div>
       </div>
@@ -118,7 +126,7 @@
         <p class="help">Any OpenAI-compatible server on this PC or your network, such as 9Router, Ollama or LM Studio.</p>
         <label class="field">Server URL <input class="input" data-role="url" spellcheck="false" placeholder="http://127.0.0.1:11434/v1" /></label>
         <div class="presets"><span class="help">Presets</span>
-          <button class="btn" data-preset="http://127.0.0.1:20128/v1" data-name="9Router">9Router</button>
+          <button class="btn" data-preset="http://127.0.0.1:20128/v1 http://127.0.0.1:20127/v1" data-name="9Router">9Router</button>
           <button class="btn" data-preset="http://127.0.0.1:11434/v1" data-name="Ollama">Ollama</button>
           <button class="btn" data-preset="http://127.0.0.1:1234/v1" data-name="LM Studio">LM Studio</button>
         </div>
@@ -129,7 +137,11 @@
         <div class="row"><button class="btn" data-role="load" data-icon="refresh-cw">Load models</button><button class="btn ghost" data-role="remove">Remove key</button></div>
         <p class="meta" data-role="status"></p>
         <div class="model-picker-list" data-role="picker" hidden>
-          <input class="input" data-role="filter" placeholder="Filter models" />
+          <div class="picker-tools">
+            <input class="input" data-role="filter" placeholder="Filter models" />
+            <button type="button" class="chip" data-role="vision-only" aria-pressed="false" title="Show only models that can read images">Images only</button>
+            <button type="button" class="chip" data-role="speed" title="Measure how fast the ticked models start answering">Test speed</button>
+          </div>
           <div class="model-list" data-role="list"></div>
         </div>
       </div>

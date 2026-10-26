@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('ip', {
   providerStatus: invoke('providers:status'),
   fetchProviderModels: invoke('providers:fetchModels'),
   saveProviders: invoke('providers:save'),
+  speedTest: invoke('providers:speedTest'),
   usage: invoke('usage:get'),
   capture: invoke('capture:start'),
   ask: invoke('ask:start'),

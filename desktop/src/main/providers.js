@@ -40,8 +40,11 @@ function localBase() {
   return base;
 }
 
-function openAiBase(provider) {
-  return provider === 'groq' ? GROQ_BASE : localBase();
+// `override` is an unsaved URL typed in Settings (for Load models / Test speed).
+function openAiBase(provider, override) {
+  if (provider === 'groq') return GROQ_BASE;
+  const base = override || localBase();
+  return settings.checkUrl(base, 'Local server URL', { allowLan: true }).href.replace(/\/+$/, '');
 }
 
 function providerLabel(provider) {
@@ -97,18 +100,46 @@ async function fetchModels(provider, opts = {}) {
       .map((id) => ({ id, vision: true }));
   }
 
-  let base = provider === 'groq' ? GROQ_BASE : (opts.baseUrl ?? localBase());
-  if (provider === 'local') base = settings.checkUrl(base, 'Local server URL', { allowLan: true }).href.replace(/\/+$/, '');
+  const base = openAiBase(provider, opts.baseUrl);
   const headers = key ? { authorization: `Bearer ${key}` } : {};
   const res = await call(provider, `${base}/models`, { headers, signal });
   if (!res.ok) throw await failure(provider, res);
   const body = await res.json();
   const list = Array.isArray(body.data) ? body.data : Array.isArray(body.models) ? body.models : [];
   return list
-    .map((m) => m.id || m.name)
-    .filter((id) => typeof id === 'string' && !NON_CHAT_RE.test(id))
-    .sort()
-    .map((id) => ({ id, vision: VISION_RE.test(id) }));
+    .map((m) => (typeof m === 'string' ? { id: m } : { ...m, id: m.id || m.name }))
+    .filter((m) => typeof m.id === 'string' && !NON_CHAT_RE.test(m.id))
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((m) => {
+      // Servers like 9Router report capabilities; trust them over the name guess.
+      const caps = m.capabilities || {};
+      const known = typeof caps.vision === 'boolean';
+      return {
+        id: m.id,
+        vision: known ? caps.vision : VISION_RE.test(m.id),
+        visionSource: known ? 'server' : 'guess',
+        reasoning: Boolean(caps.reasoning || caps.thinking),
+      };
+    });
+}
+
+// Time to first token for one model with a tiny prompt (used by "Test speed").
+async function speedTest(provider, model, opts = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  const t0 = performance.now();
+  try {
+    const messages = [{ role: 'user', text: 'Reply with the single word OK.', images: [] }];
+    for await (const ev of stream({ modelId: `${provider}:${model}`, messages, signal: controller.signal, override: opts })) {
+      if (ev.type === 'delta') return { ok: true, firstTokenMs: Math.round(performance.now() - t0) };
+    }
+    return { ok: false, error: 'The model returned no text.' };
+  } catch (err) {
+    return { ok: false, error: err.name === 'AbortError' ? 'No reply within 30 s.' : err.message };
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+  }
 }
 
 // The user's chosen models for every configured direct provider.
@@ -125,6 +156,7 @@ function listModels() {
         label: `${group} · ${m.id}`,
         group: provider === 'local' ? `${group} (this network)` : `${group} (your key)`,
         vision: m.vision,
+        latencyMs: m.latencyMs ?? null,
         webSearch: DEFS[provider].webSearch,
         direct: true,
         local: provider === 'local',
@@ -135,12 +167,12 @@ function listModels() {
 }
 
 // Streams one answer. Yields { type: 'delta' | 'sources' | 'usage', ... }.
-async function* stream({ modelId, messages, webSearch, signal }) {
+async function* stream({ modelId, messages, webSearch, signal, override = {} }) {
   const sep = modelId.indexOf(':');
   const provider = modelId.slice(0, sep);
   const model = modelId.slice(sep + 1);
   if (!DEFS[provider]) throw new ProviderError(`Unknown model ${modelId}.`);
-  const key = keyFor(provider);
+  const key = keyFor(provider, override.apiKey);
 
   if (provider === 'gemini') {
     const body = {
@@ -194,7 +226,7 @@ async function* stream({ modelId, messages, webSearch, signal }) {
   };
   const headers = { 'content-type': 'application/json' };
   if (key) headers.authorization = `Bearer ${key}`;
-  const res = await call(provider, `${openAiBase(provider)}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body), signal });
+  const res = await call(provider, `${openAiBase(provider, override.baseUrl)}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body), signal });
   if (!res.ok) throw await failure(provider, res);
   for await (const data of sseData(res)) {
     if (data === '[DONE]') break;
@@ -220,4 +252,4 @@ async function* sseData(res) {
   while (queue.length) yield queue.shift();
 }
 
-module.exports = { fetchModels, listModels, stream, ProviderError, DEFS, VISION_RE };
+module.exports = { fetchModels, listModels, stream, speedTest, ProviderError, DEFS, VISION_RE };

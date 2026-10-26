@@ -417,6 +417,10 @@ function registerIpc() {
     apiKey: typeof opts?.apiKey === 'string' ? opts.apiKey.trim() : undefined,
     baseUrl: typeof opts?.baseUrl === 'string' ? opts.baseUrl.trim() : undefined,
   }));
+  handlePanel('providers:speedTest', (_e, provider, model, opts) => providers.speedTest(String(provider), String(model), {
+    apiKey: typeof opts?.apiKey === 'string' && opts.apiKey.trim() ? opts.apiKey.trim() : undefined,
+    baseUrl: typeof opts?.baseUrl === 'string' && opts.baseUrl.trim() ? opts.baseUrl.trim() : undefined,
+  }));
   // patch: { cloud: { enabled }, gemini|groq|local: { apiKey?, models?, baseUrl?, label? } }
   // apiKey: new key, '' to remove, undefined to keep.
   handlePanel('providers:save', async (_e, patch) => {
