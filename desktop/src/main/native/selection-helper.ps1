@@ -66,19 +66,31 @@ public static class IPSelection {
         hookThread.Start();
         Emit("{\"type\":\"ready\"}");
 
+        // Commands: "<name> <id>". Slow work runs on pool (MTA) threads, never on
+        // this STA thread: UI Automation calls from an STA without a message
+        // pump can stall, which made the hotkey time out.
         string line;
         while ((line = Console.In.ReadLine()) != null) {
             line = line.Trim();
-            if (line == "getsel") {
-                Emit("{\"type\":\"sel-result\",\"text\":" + Json(ReadSelection(false)) + "}");
-            } else if (line == "copy") {
-                // Ctrl+C in a terminal with nothing selected would interrupt the running program.
-                if (ForegroundIsConsole()) {
-                    Emit("{\"type\":\"copy-sent\",\"skipped\":true}");
-                } else {
-                    SendCopy();
-                    Emit("{\"type\":\"copy-sent\"}");
-                }
+            string[] parts = line.Split(' ');
+            string cmd = parts[0];
+            string id = parts.Length > 1 ? parts[1] : "0";
+            if (cmd == "getsel") {
+                ThreadPool.QueueUserWorkItem(delegate (object s) {
+                    long t0 = DateTime.UtcNow.Ticks;
+                    string text = ReadSelection(false);
+                    Emit("{\"type\":\"sel-result\",\"id\":\"" + id + "\",\"ms\":" + ((DateTime.UtcNow.Ticks - t0) / 10000) + ",\"text\":" + Json(text) + "}");
+                });
+            } else if (cmd == "copy") {
+                ThreadPool.QueueUserWorkItem(delegate (object s) {
+                    // Ctrl+C in a terminal with nothing selected would interrupt the running program.
+                    if (ForegroundIsConsole()) {
+                        Emit("{\"type\":\"copy-sent\",\"id\":\"" + id + "\",\"skipped\":true}");
+                    } else {
+                        SendCopy();
+                        Emit("{\"type\":\"copy-sent\",\"id\":\"" + id + "\"}");
+                    }
+                });
             } else if (line == "watch 1") {
                 watching = true;
             } else if (line == "watch 0") {
@@ -169,15 +181,23 @@ public static class IPSelection {
     }
 
     // Sends Ctrl+C once the user has let go of the hotkey's modifier keys.
+    // The user is usually still holding the hotkey's modifiers (Ctrl+Shift),
+    // and Ctrl+Shift+C means something else in many apps. So Shift is
+    // released synthetically right away instead of waiting for the user.
+    // Alt/Win are waited for (briefly), since a synthetic Alt or Win release
+    // can open a menu or the Start menu.
     static void SendCopy() {
-        int[] mods = { 0x10, 0x11, 0x12, 0x5B, 0x5C }; // Shift, Ctrl, Alt, LWin, RWin
-        for (int i = 0; i < 75; i++) {
+        const uint KEYUP = 0x0002;
+        int[] waitFor = { 0x12, 0x5B, 0x5C }; // Alt, LWin, RWin
+        for (int i = 0; i < 25; i++) {
             bool held = false;
-            foreach (int vk in mods) if ((GetAsyncKeyState(vk) & 0x8000) != 0) held = true;
+            foreach (int vk in waitFor) if ((GetAsyncKeyState(vk) & 0x8000) != 0) held = true;
             if (!held) break;
             Thread.Sleep(20);
         }
-        const uint KEYUP = 0x0002;
+        foreach (byte vk in new byte[] { 0xA0, 0xA1 }) { // LShift, RShift
+            if ((GetAsyncKeyState(vk) & 0x8000) != 0) keybd_event(vk, 0, KEYUP, UIntPtr.Zero);
+        }
         keybd_event(0x11, 0, 0, UIntPtr.Zero);
         keybd_event(0x43, 0, 0, UIntPtr.Zero);
         keybd_event(0x43, 0, KEYUP, UIntPtr.Zero);
@@ -212,5 +232,17 @@ public static class IPSelection {
 }
 '@
 
-Add-Type -TypeDefinition $source -ReferencedAssemblies UIAutomationClient, UIAutomationTypes, System.Windows.Forms
+# Compile once and reuse: the DLL is cached per source hash under
+# %LOCALAPPDATA%\IntelliPointer\helper-cache, so later starts skip the C# compiler.
+$hash = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($source))).Replace('-', '').Substring(0, 16)
+$cacheDir = Join-Path $env:LOCALAPPDATA 'IntelliPointer\helper-cache'
+$dll = Join-Path $cacheDir "IPSelection-$hash.dll"
+if (-not (Test-Path $dll)) {
+  New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+  $tmp = "$dll.$PID.tmp"
+  Add-Type -TypeDefinition $source -ReferencedAssemblies UIAutomationClient, UIAutomationTypes, System.Windows.Forms -OutputAssembly $tmp -OutputType Library
+  Move-Item -Force -Path $tmp -Destination $dll
+}
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.Forms
+Add-Type -Path $dll
 [IPSelection]::Run($OwnPid)

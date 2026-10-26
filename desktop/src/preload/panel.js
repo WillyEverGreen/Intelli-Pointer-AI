@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('ip', {
   resize: invoke('panel:resize'),
   hide: invoke('panel:hide'),
   openLatencyLog: invoke('open:latencyLog'),
+  openDiagnostics: invoke('open:diagnostics'),
   onContext: (cb) => ipcRenderer.on('context:add', (_e, d) => cb(d)),
   onOcr: (cb) => ipcRenderer.on('context:ocr', (_e, d) => cb(d)),
   onAskEvent: (cb) => ipcRenderer.on('ask:event', (_e, d) => cb(d)),

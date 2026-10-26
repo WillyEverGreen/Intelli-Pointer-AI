@@ -11,7 +11,14 @@ const latency = require('./latency');
 const selection = require('./selection');
 const secrets = require('./secrets');
 const providers = require('./providers');
+const { log, logFile } = require('./log');
+const clip = require('./clipboard');
 const { makeIcon } = require('./icon');
+
+// Runs an async handler from a hotkey/menu and logs failures instead of dropping them.
+const guarded = (name, fn) => (...args) => Promise.resolve().then(() => fn(...args)).catch((err) => {
+  log(`${name}.error`, { error: err.message, stack: String(err.stack).split(/\r?\n/).slice(0, 3).join(' | ') });
+});
 
 const MAX_IMAGE_BYTES = 3.5 * 1024 * 1024; // backend limit is 4 MB decoded
 const PANEL_SIZE = { width: 460, height: 600 };
@@ -177,12 +184,31 @@ function openWithText(text, { action = null, kind = 'selection', bbox = null } =
 // Hotkey: ask about the text selected in the foreground app. Tries UI
 // Automation first (no side effects), then a Ctrl+C round-trip that restores
 // the clipboard, then whatever is already on the clipboard.
+// Last resort: the text most recently selected with the mouse (seen by the
+// helper's hook), for apps that expose neither UIA selection nor Ctrl+C.
 async function askAboutSelection() {
+  const t0 = performance.now();
+  log('hotkey.pressed', { hotkey: 'selection', helperReady: selection.isAvailable() });
   hideBubble();
-  let text = await selection.readViaAutomation();
-  if (!text) text = await selection.readViaCopy();
+  const auto = await selection.readViaAutomation();
+  let text = auto.text;
+  let source = 'automation';
+  let copy = null;
+  if (!text) {
+    copy = await selection.readViaCopy();
+    text = copy.text;
+    source = 'copy';
+  }
+  if (!text) {
+    text = selection.recentSelection();
+    source = 'recent-mouse-selection';
+  }
+  log('hotkey.selection', {
+    ms: Math.round(performance.now() - t0), source: text ? source : 'none', chars: text.length,
+    automationMs: auto.ms, automationTimedOut: auto.timedOut, copySkipped: copy?.skipped, copyTimedOut: copy?.timedOut,
+  });
   if (text) return openWithText(text, { kind: 'selection' });
-  return askAboutClipboard();
+  return askAboutClipboard({ fromHotkey: true });
 }
 
 // ---------- capture pipeline ----------
@@ -224,6 +250,7 @@ async function runOcr(regions) {
 
 async function startCapture(mode = 'replace') {
   if (capture.isActive()) return;
+  log('hotkey.pressed', { hotkey: 'capture', mode });
   hideBubble();
   const tHotkey = performance.now();
   const panelWasVisible = panel.isVisible();
@@ -233,6 +260,7 @@ async function startCapture(mode = 'replace') {
   try {
     result = await capture.startSelection();
   } catch (err) {
+    log('capture.error', { error: err.message });
     new Notification({ title: 'IntelliPointer', body: err.message }).show();
     return;
   }
@@ -241,6 +269,7 @@ async function startCapture(mode = 'replace') {
     return;
   }
   const selectionMs = Math.round(performance.now() - tHotkey);
+  log('capture.done', { captureMs: result.captureMs, overlayShownMs: result.overlayShownMs, selectionMs, regions: result.regions.length });
 
   const regions = result.regions.map((r) => ({ ...r, png: Buffer.from(r.png) }));
   const bounds = result.displayBounds;
@@ -266,17 +295,20 @@ async function startCapture(mode = 'replace') {
   panel.webContents.send('context:ocr', { contextId, text: o.text, confidence: o.confidence, error: o.error || null, ocrMs: o.ms });
 }
 
-function askAboutClipboard() {
-  const image = clipboard.readImage();
-  const text = clipboard.readText().trim();
+async function askAboutClipboard({ fromHotkey = false } = {}) {
+  const png = await clip.readImagePng();
+  const text = png ? '' : (await clip.readText()).trim();
   const contextId = `ctx-${Date.now()}`;
-  if (!image.isEmpty()) {
-    const att = { label: 'Clipboard image', ...image.getSize(), ...toAttachment(image.toPNG()) };
+  if (png) {
+    const att = { label: 'Clipboard image', ...nativeImage.createFromBuffer(png).getSize(), ...toAttachment(png) };
     panel.webContents.send('context:add', { contextId, mode: 'replace', kind: 'clipboard', images: [att], text: '' });
   } else if (text) {
     panel.webContents.send('context:add', { contextId, mode: 'replace', kind: 'clipboard', images: [], text: text.slice(0, 15000) });
   } else {
-    new Notification({ title: 'IntelliPointer', body: 'Clipboard is empty. Copy some text or an image first (Ctrl+C).' }).show();
+    const body = fromHotkey
+      ? "No selected text found. Select some text first. If an app won't share its selection, press Ctrl+C and then the shortcut."
+      : 'Clipboard is empty. Copy some text or an image first (Ctrl+C).';
+    new Notification({ title: 'IntelliPointer', body }).show();
     return;
   }
   showPanel({ focus: true });
@@ -284,12 +316,26 @@ function askAboutClipboard() {
 
 // ---------- hotkeys & tray ----------
 
+// Shortcuts another app already owns; shown in the panel until fixed.
+let hotkeyErrors = [];
+
 function registerHotkeys() {
   globalShortcut.unregisterAll();
   const s = settings.get();
   const failed = [];
-  if (!globalShortcut.register(s.captureHotkey, () => startCapture('replace'))) failed.push(s.captureHotkey);
-  if (!globalShortcut.register(s.clipboardHotkey, askAboutSelection)) failed.push(s.clipboardHotkey);
+  const tryRegister = (accelerator, fn) => {
+    let ok = false;
+    try {
+      ok = globalShortcut.register(accelerator, fn);
+    } catch (err) {
+      log('hotkey.invalid', { accelerator, error: err.message });
+    }
+    if (!ok) failed.push(accelerator);
+  };
+  tryRegister(s.captureHotkey, guarded('capture', () => startCapture('replace')));
+  tryRegister(s.clipboardHotkey, guarded('selection', askAboutSelection));
+  hotkeyErrors = failed;
+  log('hotkeys.registered', { capture: s.captureHotkey, selection: s.clipboardHotkey, failed });
   return failed;
 }
 
@@ -300,7 +346,7 @@ function createTray() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: `Capture screen region   (${s.captureHotkey})`, click: () => startCapture('replace') },
     { label: `Ask about selected text: select it, press ${s.clipboardHotkey}`, enabled: false },
-    { label: 'Ask about clipboard', click: askAboutClipboard },
+    { label: 'Ask about clipboard', click: guarded('clipboard', () => askAboutClipboard()) },
     { label: 'Show panel', click: () => showPanel({ focus: true }) },
     { type: 'separator' },
     { label: 'Open latency log', click: () => shell.showItemInFolder(latency.file()) },
@@ -349,7 +395,8 @@ function registerIpc() {
     if (fromBubble(e)) bubbleHover = Boolean(inside);
   });
 
-  handlePanel('settings:get', () => ({ ...settings.get(), latencyFile: latency.file(), build: buildInfo() }));
+  handlePanel('settings:get', () => ({ ...settings.get(), latencyFile: latency.file(), build: buildInfo(), hotkeyErrors }));
+  handlePanel('open:diagnostics', () => shell.showItemInFolder(logFile()));
   handlePanel('settings:update', (_e, patch) => {
     const next = settings.update(patch);
     const failed = registerHotkeys();
@@ -471,18 +518,20 @@ app.whenReady().then(async () => {
     await runSmokeTest(SMOKE_TEST_OUT);
     return;
   }
-  createPanel();
-  createBubble();
-  capture.init();
+  log('app.start', { version: buildInfo().version, commit: buildInfo().commit, packaged: app.isPackaged });
+  // Start the helper first: PowerShell needs a moment to load it.
   selection.events.on('selection', showBubble);
   selection.events.on('down', onGlobalMouseDown);
   selection.setWatching(settings.get().selectionBubble);
   selection.start();
+  const failed = registerHotkeys();
+  createPanel();
+  createBubble();
+  capture.init();
   createTray();
   registerIpc();
-  const failed = registerHotkeys();
   if (failed.length) {
-    new Notification({ title: 'IntelliPointer', body: `Hotkey already in use: ${failed.join(', ')}. Change it in Settings.` }).show();
+    new Notification({ title: 'IntelliPointer', body: `Shortcut already used by another app: ${failed.join(', ')}. Change it in Settings.` }).show();
   }
   if (settings.get().ocrEnabled) ocr.warmUp();
   showPanel({ focus: true }); // first launch: show the panel so users find settings

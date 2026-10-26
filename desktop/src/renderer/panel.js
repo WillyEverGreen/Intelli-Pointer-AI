@@ -93,6 +93,11 @@
     } else {
       banner('');
     }
+    // A shortcut taken by another app silently does nothing, so say so until it's changed.
+    if (settings.hotkeyErrors?.length) {
+      const keys = settings.hotkeyErrors.map(prettyHotkey).join(' and ');
+      banner(`${keys} is already used by another app, so that shortcut won't work. Choose a different one in Settings.`, { label: 'Settings', onClick: openSettings });
+    }
     updatePrivacy();
   }
 
@@ -823,6 +828,7 @@
     refreshAuth();
   });
   $('btn-latency').addEventListener('click', () => window.ip.openLatencyLog());
+  $('btn-diagnostics').addEventListener('click', () => window.ip.openDiagnostics());
 
   (async () => {
     settings = await window.ip.getSettings();

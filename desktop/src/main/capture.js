@@ -86,7 +86,7 @@ async function startSelection() {
   const captureMs = Math.round(performance.now() - t0);
 
   return new Promise((resolve, reject) => {
-    session = { resolve, reject, captureMs, pendingReady: 0 };
+    session = { resolve, reject, captureMs, pendingReady: 0, t0, overlayShownMs: null };
     for (const { display, image } of shots) {
       let win = overlays.get(display.id);
       if (!win || win.isDestroyed()) win = createOverlay(display);
@@ -112,6 +112,7 @@ async function startSelection() {
 function onOverlayReady(webContents) {
   const win = BrowserWindow.fromWebContents(webContents);
   if (!session || !win) return;
+  session.overlayShownMs ??= Math.round(performance.now() - session.t0);
   win.show();
   win.focus();
   win.moveTop();
@@ -119,14 +120,14 @@ function onOverlayReady(webContents) {
 
 function finish(result) {
   if (!session) return;
-  const { resolve, captureMs } = session;
+  const { resolve, captureMs, overlayShownMs } = session;
   session = null;
   for (const win of overlays.values()) {
     if (win.isDestroyed()) continue;
     win.hide();
     win.webContents.send('overlay:reset');
   }
-  resolve(result ? { ...result, captureMs } : null);
+  resolve(result ? { ...result, captureMs, overlayShownMs } : null);
 }
 
 function onOverlayConfirm(webContents, payload) {

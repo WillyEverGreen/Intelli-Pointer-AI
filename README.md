@@ -128,6 +128,8 @@ Or double-click **`Update IntelliPointer.cmd`** in the repo root. The same comma
 
 Settings, sign-in and the latency log live in `%APPDATA%\IntelliPointer AI`, so they survive updates. **Settings → Privacy and diagnostics** shows the installed version and build commit; `+changes` means it was built from uncommitted work. `npm run app:build` only builds into `desktop/dist/` without installing.
 
+**If a shortcut doesn't respond:** another app may already own it. The panel then shows a warning, and you can pick another shortcut in Settings. Otherwise, open **Settings → Privacy and diagnostics → Diagnostics log**. It records each key press, which method found the selected text and how long it took, and any error. It never stores the text itself.
+
 To uninstall, quit from the tray, then delete `%LOCALAPPDATA%\Programs\IntelliPointer AI` and the two shortcuts.
 
 ## Cloud setup (Firebase + Render, free tiers)
