@@ -27,6 +27,12 @@ let panel = null;
 let tray = null;
 let pinned = true;
 
+// Keep Chromium lean: no spare pre-spawned renderer, no media-key/session
+// services, no translate or autofill background work.
+app.commandLine.appendSwitch('disable-features', [
+  'SpareRendererForSitePerProcess', 'MediaSessionService', 'HardwareMediaKeyHandling', 'Translate', 'AutofillServerCommunication',
+].join(','));
+
 const SMOKE_TEST_OUT = (process.argv.find((a) => a.startsWith('--smoke-test=')) || '').slice('--smoke-test='.length);
 
 // The smoke test may run while the user's copy is open, so it skips the lock.
@@ -56,6 +62,7 @@ function createPanel() {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      spellcheck: false,
     },
   });
   panel.loadFile(path.join(__dirname, '..', 'renderer', 'panel.html'));
@@ -128,6 +135,7 @@ function createBubble() {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      spellcheck: false,
     },
   });
   bubble.setAlwaysOnTop(true, 'pop-up-menu');
@@ -254,6 +262,8 @@ async function runOcr(regions) {
 async function startCapture(mode = 'replace') {
   if (capture.isActive()) return;
   log('hotkey.pressed', { hotkey: 'capture', mode });
+  // Load OCR while the user is still selecting, so it is ready by confirm.
+  if (settings.get().ocrEnabled) ocr.warmUp();
   hideBubble();
   const tHotkey = performance.now();
   const panelWasVisible = panel.isVisible();
@@ -403,7 +413,6 @@ function registerIpc() {
   handlePanel('settings:update', (_e, patch) => {
     const next = settings.update(patch);
     const failed = registerHotkeys();
-    if (next.ocrEnabled) ocr.warmUp();
     selection.setWatching(next.selectionBubble);
     if (!next.selectionBubble) hideBubble();
     return { settings: next, hotkeyErrors: failed };
@@ -508,6 +517,14 @@ async function runSmokeTest(outFile) {
     check('OCR engine bundled', false, err.message);
   }
   check('no renderer console errors', errors.length === 0, errors.join(' | '));
+  // Footprint at idle: all processes' memory and CPU over ~2 s.
+  app.getAppMetrics(); // prime CPU counters
+  await new Promise((r) => setTimeout(r, 2000));
+  const metrics = app.getAppMetrics();
+  report.memoryMB = Math.round(metrics.reduce((sum, m) => sum + (m.memory?.workingSetSize || 0), 0) / 1024);
+  report.idleCpuPercent = Math.round(metrics.reduce((sum, m) => sum + (m.cpu?.percentCPUUsage || 0), 0) * 10) / 10;
+  report.processes = metrics.length;
+  check(`idle CPU ${report.idleCpuPercent}% (under 2%)`, report.idleCpuPercent < 2);
   report.build = buildInfo();
   require('node:fs').writeFileSync(outFile, JSON.stringify(report, null, 2));
   app.exit(report.ok ? 0 : 1);
@@ -541,7 +558,6 @@ app.whenReady().then(async () => {
   if (failed.length) {
     new Notification({ title: 'IntelliPointer', body: `Shortcut already used by another app: ${failed.join(', ')}. Change it in Settings.` }).show();
   }
-  if (settings.get().ocrEnabled) ocr.warmUp();
   showPanel({ focus: true }); // first launch: show the panel so users find settings
 });
 

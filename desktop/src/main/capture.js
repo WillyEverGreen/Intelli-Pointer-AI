@@ -1,6 +1,7 @@
 const path = require('node:path');
 const { BrowserWindow, screen, desktopCapturer } = require('electron');
 const { log } = require('./log');
+const selection = require('./selection');
 
 // Screen capture + selection overlays.
 //
@@ -41,6 +42,7 @@ function createOverlay(display) {
       sandbox: true,
       nodeIntegration: false,
       backgroundThrottling: false, // keep it ready to paint while hidden
+      spellcheck: false,
     },
   });
   win.setAlwaysOnTop(true, 'screen-saver');
@@ -62,18 +64,8 @@ function rebuildOverlays() {
   for (const d of screen.getAllDisplays()) createOverlay(d);
 }
 
-// desktopCapturer's first call blocks the main thread for seconds while it
-// initialises; pay that once at startup instead of on the first hotkey.
-function warmUp() {
-  const t0 = performance.now();
-  desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } })
-    .then(() => log('capture.warmup', { ms: Math.round(performance.now() - t0) }))
-    .catch((err) => log('capture.warmup_error', { error: err.message }));
-}
-
 function init() {
   rebuildOverlays();
-  setTimeout(warmUp, 1500);
   for (const ev of ['display-added', 'display-removed', 'display-metrics-changed']) {
     screen.on(ev, () => {
       if (!session) rebuildOverlays();
@@ -81,7 +73,30 @@ function init() {
   }
 }
 
+// Fast path: the selection helper copies each display with BitBlt (~50 ms,
+// no warm-up). Returns null if any display can't be grabbed that way.
+async function grabWithHelper(displays) {
+  if (!selection.isAvailable()) return null;
+  const shots = await Promise.all(displays.map(async (d) => {
+    const rect = screen.dipToScreenRect(null, d.bounds); // physical pixels
+    const res = await selection.grab(rect);
+    return res && { display: d, width: res.width, height: res.height, bitmap: res.bitmap };
+  }));
+  return shots.every(Boolean) ? shots : null;
+}
+
 async function grabDisplays(displays) {
+  const t0 = performance.now();
+  const fast = await grabWithHelper(displays).catch((err) => {
+    log('capture.helper_error', { error: err.message });
+    return null;
+  });
+  if (fast) return { shots: fast, method: 'bitblt', ms: Math.round(performance.now() - t0) };
+  const shots = await grabWithElectron(displays);
+  return { shots, method: 'desktopCapturer', ms: Math.round(performance.now() - t0) };
+}
+
+async function grabWithElectron(displays) {
   const phys = (d) => ({ width: Math.round(d.bounds.width * d.scaleFactor), height: Math.round(d.bounds.height * d.scaleFactor) });
   const maxW = Math.max(...displays.map((d) => phys(d).width));
   const maxH = Math.max(...displays.map((d) => phys(d).height));
@@ -142,18 +157,25 @@ function startSelection() {
         session.overlayShownMs = Math.round(performance.now() - t0);
         return grabDisplays(displays);
       })
-      .then((shots) => {
-        if (!shots || !session || session.resolve !== resolve) return; // cancelled meanwhile
+      .then((grabbed) => {
+        if (!grabbed || !session || session.resolve !== resolve) return; // cancelled meanwhile
         session.captureMs = Math.round(performance.now() - t0);
+        session.captureMethod = grabbed.method;
         let sent = 0;
-        for (const { display, image } of shots) {
-          const win = overlays.get(display.id);
-          if (!image || !win || win.isDestroyed()) continue;
-          const { width, height } = image.getSize();
-          win.webContents.send('overlay:frame', { width, height, bitmap: image.toBitmap() }); // BGRA
+        for (const shot of grabbed.shots) {
+          const win = overlays.get(shot.display.id);
+          if (!win || win.isDestroyed()) continue;
+          // BitBlt shots are already raw BGRA; Electron's are NativeImages.
+          const frame = shot.bitmap
+            ? { width: shot.width, height: shot.height, bitmap: shot.bitmap }
+            : shot.image && { ...shot.image.getSize(), bitmap: shot.image.toBitmap() };
+          if (!frame) continue;
+          win.webContents.send('overlay:frame', frame);
           sent += 1;
         }
-        log('capture.timing', { overlayShownMs: session.overlayShownMs, captureMs: session.captureMs, displays: displays.length });
+        log('capture.timing', {
+          overlayShownMs: session.overlayShownMs, captureMs: session.captureMs, grabMs: grabbed.ms, method: grabbed.method, displays: displays.length,
+        });
         if (!sent) throw new Error('Screen capture returned no images. Check Windows privacy settings for screen capture.');
       })
       .catch((err) => {
@@ -181,11 +203,11 @@ function hideAll() {
 
 function finish(result) {
   if (!session) return;
-  const { resolve, captureMs, overlayShownMs, t0 } = session;
+  const { resolve, captureMs, overlayShownMs, captureMethod, t0 } = session;
   session = null;
   hideAll();
   if (!result) log('capture.cancelled', { afterMs: Math.round(performance.now() - t0) });
-  resolve(result ? { ...result, captureMs, overlayShownMs } : null);
+  resolve(result ? { ...result, captureMs, overlayShownMs, captureMethod } : null);
 }
 
 function onOverlayConfirm(webContents, payload) {

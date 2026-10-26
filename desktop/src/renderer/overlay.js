@@ -299,15 +299,25 @@
     });
   }
 
+  // Draw loop runs only while the overlay is open, so it costs no CPU when hidden.
+  let looping = false;
   function loop() {
+    if (!active) {
+      looping = false;
+      return;
+    }
     try {
-      if (active) render();
+      render();
     } catch (err) {
       console.error('overlay render failed', err);
     }
     requestAnimationFrame(loop);
   }
-  requestAnimationFrame(loop);
+  function startLoop() {
+    if (looping) return;
+    looping = true;
+    requestAnimationFrame(loop);
+  }
 
   // ---------- pointer interaction ----------
 
@@ -510,6 +520,7 @@
     frameReady = new Promise((r) => { resolveFrame = r; });
     toolbar.classList.remove('bottom');
     render();
+    startLoop();
     // Two frames later the dimmed overlay is on screen: tell main to capture now.
     requestAnimationFrame(() => requestAnimationFrame(() => window.overlay.shown()));
   });

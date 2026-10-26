@@ -54,8 +54,13 @@ public static class IPSelection {
     static POINT lastUpPt;
     static bool doubleClick = false;
 
+    [DllImport("user32.dll")] static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+
     public static void Run(int pid) {
         ownPid = pid;
+        // Per-monitor DPI aware: screen copies use real physical pixels.
+        // (Low-level mouse hook coordinates are physical either way.)
+        try { SetProcessDpiAwarenessContext(new IntPtr(-4)); } catch (Exception) { }
         Thread hookThread = new Thread(delegate () {
             string module = Process.GetCurrentProcess().MainModule.ModuleName;
             SetWindowsHookEx(WH_MOUSE_LL, proc, GetModuleHandle(module), 0);
@@ -91,6 +96,10 @@ public static class IPSelection {
                         Emit("{\"type\":\"copy-sent\",\"id\":\"" + id + "\"}");
                     }
                 });
+            } else if (cmd == "grab" && parts.Length >= 6) {
+                // grab <id> <x> <y> <w> <h>: copy a screen rectangle (physical px).
+                int gx = int.Parse(parts[2]), gy = int.Parse(parts[3]), gw = int.Parse(parts[4]), gh = int.Parse(parts[5]);
+                ThreadPool.QueueUserWorkItem(delegate (object s) { Grab(id, gx, gy, gw, gh); });
             } else if (line == "watch 1") {
                 watching = true;
             } else if (line == "watch 0") {
@@ -168,6 +177,32 @@ public static class IPSelection {
         return "";
     }
 
+    // Screen copy with GDI BitBlt: ~50 ms for 1080p, no warm-up, and windows
+    // with content protection (our overlay) are left out by Windows.
+    // Replies with raw BGRA pixels, base64, on one line. Nothing touches disk.
+    static void Grab(string id, int x, int y, int w, int h) {
+        try {
+            long t0 = DateTime.UtcNow.Ticks;
+            byte[] raw;
+            using (var bmp = new System.Drawing.Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+            using (var g = System.Drawing.Graphics.FromImage(bmp)) {
+                g.CopyFromScreen(x, y, 0, 0, new System.Drawing.Size(w, h), System.Drawing.CopyPixelOperation.SourceCopy);
+                var data = bmp.LockBits(new System.Drawing.Rectangle(0, 0, w, h), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                raw = new byte[w * 4 * h];
+                if (data.Stride == w * 4) {
+                    Marshal.Copy(data.Scan0, raw, 0, raw.Length);
+                } else {
+                    for (int row = 0; row < h; row++) Marshal.Copy(new IntPtr(data.Scan0.ToInt64() + (long)row * data.Stride), raw, row * w * 4, w * 4);
+                }
+                bmp.UnlockBits(data);
+            }
+            long ms = (DateTime.UtcNow.Ticks - t0) / 10000;
+            Emit("{\"type\":\"grab\",\"id\":\"" + id + "\",\"ms\":" + ms + ",\"width\":" + w + ",\"height\":" + h + ",\"data\":\"" + Convert.ToBase64String(raw) + "\"}");
+        } catch (Exception e) {
+            Emit("{\"type\":\"grab\",\"id\":\"" + id + "\",\"error\":" + Json(e.Message) + "}");
+        }
+    }
+
     static bool ForegroundIsConsole() {
         try {
             uint pid;
@@ -240,9 +275,9 @@ $dll = Join-Path $cacheDir "IPSelection-$hash.dll"
 if (-not (Test-Path $dll)) {
   New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
   $tmp = "$dll.$PID.tmp"
-  Add-Type -TypeDefinition $source -ReferencedAssemblies UIAutomationClient, UIAutomationTypes, System.Windows.Forms -OutputAssembly $tmp -OutputType Library
+  Add-Type -TypeDefinition $source -ReferencedAssemblies UIAutomationClient, UIAutomationTypes, System.Windows.Forms, System.Drawing -OutputAssembly $tmp -OutputType Library
   Move-Item -Force -Path $tmp -Destination $dll
 }
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.Forms
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.Forms, System.Drawing
 Add-Type -Path $dll
 [IPSelection]::Run($OwnPid)

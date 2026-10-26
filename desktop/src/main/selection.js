@@ -37,39 +37,46 @@ function start() {
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', helperPath(), String(process.pid)],
     { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] },
   );
-  let buf = '';
-  child.stdout.setEncoding('utf8');
+  // Lines can be large (a screenshot is ~11 MB of base64), so split on raw
+  // bytes and only ever scan each new chunk once.
+  let pending = [];
   child.stdout.on('data', (chunk) => {
-    buf += chunk;
-    let idx;
-    while ((idx = buf.indexOf('\n')) !== -1) {
-      const line = buf.slice(0, idx).trim();
-      buf = buf.slice(idx + 1);
-      if (!line) continue;
-      let msg;
-      try {
-        msg = JSON.parse(line);
-      } catch {
-        continue;
-      }
-      if (msg.type === 'ready') {
-        ready = true;
-        restarts = 0;
-        log('helper.ready', { ms: Date.now() - startedAt });
-        send(`watch ${watching ? 1 : 0}`);
-      } else if (msg.type === 'selection') {
-        lastSelection = { text: msg.text, at: Date.now() };
-        events.emit('selection', msg);
-      } else if (msg.type === 'down') {
-        events.emit('down', msg);
-      } else if (msg.id && waiters.has(msg.id)) {
-        const w = waiters.get(msg.id);
-        waiters.delete(msg.id);
-        clearTimeout(w.timer);
-        w.resolve(msg);
-      }
+    let start = 0;
+    let nl;
+    while ((nl = chunk.indexOf(10, start)) !== -1) {
+      pending.push(chunk.subarray(start, nl));
+      const line = (pending.length === 1 ? pending[0] : Buffer.concat(pending)).toString('utf8').trim();
+      pending = [];
+      start = nl + 1;
+      handleLine(line);
     }
+    if (start < chunk.length) pending.push(chunk.subarray(start));
   });
+  function handleLine(line) {
+    if (!line) return;
+    let msg;
+    try {
+      msg = JSON.parse(line);
+    } catch {
+      return;
+    }
+    if (msg.type === 'ready') {
+      ready = true;
+      restarts = 0;
+      log('helper.ready', { ms: Date.now() - startedAt });
+      send(`watch ${watching ? 1 : 0}`);
+    } else if (msg.type === 'selection') {
+      lastSelection = { text: msg.text, at: Date.now() };
+      events.emit('selection', msg);
+    } else if (msg.type === 'down') {
+      events.emit('down', msg);
+    } else if (msg.id && waiters.has(msg.id)) {
+      const w = waiters.get(msg.id);
+      waiters.delete(msg.id);
+      clearTimeout(w.timer);
+      w.resolve(msg);
+    }
+  }
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (d) => log('helper.stderr', { text: String(d).trim().slice(0, 500) }));
   child.on('error', (err) => log('helper.spawn_error', { error: err.message }));
@@ -101,17 +108,18 @@ function send(line) {
   if (child && ready) child.stdin.write(`${line}\n`);
 }
 
-// Sends "<cmd> <id>" and resolves with the matching reply, or null on timeout.
+// Sends "<name> <id> [args...]" and resolves with the matching reply, or null on timeout.
 function request(cmd, timeoutMs) {
   if (!child || !ready) return Promise.resolve(null);
   const id = String(nextId++);
+  const [name, ...args] = cmd.split(' ');
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       waiters.delete(id);
       resolve(null);
     }, timeoutMs);
     waiters.set(id, { resolve, timer });
-    send(`${cmd} ${id}`);
+    send([name, id, ...args].join(' '));
   });
 }
 
@@ -148,11 +156,23 @@ async function readViaCopy() {
   return { text: text.trim(), skipped: Boolean(sent?.skipped), timedOut: sent === null };
 }
 
+// Copies a screen rectangle (physical pixels) with the helper's BitBlt.
+// Resolves { width, height, bitmap: Buffer (BGRA), ms } or null if the
+// helper is unavailable or fails, so callers can fall back.
+async function grab({ x, y, width, height }) {
+  const res = await request(`grab ${Math.round(x)} ${Math.round(y)} ${Math.round(width)} ${Math.round(height)}`, 2000);
+  if (!res || res.error || !res.data) {
+    if (res?.error) log('helper.grab_error', { error: res.error });
+    return null;
+  }
+  return { width: res.width, height: res.height, bitmap: Buffer.from(res.data, 'base64'), ms: res.ms };
+}
+
 // Text the user selected with the mouse within the last `maxAgeMs`.
 function recentSelection(maxAgeMs = 120000) {
   return Date.now() - lastSelection.at <= maxAgeMs ? lastSelection.text.trim() : '';
 }
 
 module.exports = {
-  start, stop, setWatching, readViaAutomation, readViaCopy, recentSelection, events, isAvailable: () => ready,
+  start, stop, setWatching, readViaAutomation, readViaCopy, recentSelection, grab, events, isAvailable: () => ready,
 };

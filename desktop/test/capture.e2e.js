@@ -5,6 +5,9 @@
 const path = require('node:path');
 const { app, ipcMain, BrowserWindow } = require('electron');
 
+// Real BitBlt grabs through a hook-free stand-in for the selection helper.
+process.env.IP_SELECTION_HELPER_TEST = path.join(__dirname, 'fixtures', 'fake-selection-helper.ps1');
+
 app.setPath('userData', path.join(require('node:os').tmpdir(), `intellipointer-capture-test-${process.pid}`));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -22,13 +25,17 @@ app.whenReady().then(async () => {
     shownAt = performance.now();
     capture.onOverlayShown();
   });
+  const selection = require('../src/main/selection');
+  selection.start();
   capture.init();
   await wait(1500); // overlays pre-load at app start
+  check(selection.isAvailable(), 'helper ready for fast screen copies');
 
   const overlayWin = () => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('overlay.html'));
   const state = () => overlayWin().webContents.executeJavaScript('window.__overlayState()');
 
-  for (const round of [1, 2]) {
+  for (const round of [1, 2, 3]) {
+    if (round === 3) await wait(15000); // after idling: Electron's grabber used to take ~2.4 s here
     const t0 = performance.now();
     shownAt = 0;
     const pending = capture.startSelection();
@@ -42,6 +49,9 @@ app.whenReady().then(async () => {
     check(result && result.regions.length === 1 && result.regions[0].width > 100, `round ${round}: confirm before the frame still returns a full-resolution crop (${result?.regions[0].width}x${result?.regions[0].height})`);
     console.log(`  round ${round}: overlay shown ${result?.overlayShownMs} ms, screenshot in ${result?.captureMs} ms, crop ready ${totalMs} ms`);
     check(visibleMs < 100, `round ${round}: overlay appears in under 100 ms`);
+    check(result?.captureMethod === 'bitblt', `round ${round}: fast BitBlt path used (${result?.captureMethod})`);
+    check(result?.captureMs < 400, `round ${round}: screenshot ready in under 400 ms`);
+    check(totalMs < 1000, `round ${round}: hotkey to finished crop in under 1 s (${totalMs} ms)`);
     await wait(400);
     check(!overlayWin().isVisible(), `round ${round}: overlay hidden after confirm`);
     const st = await state();

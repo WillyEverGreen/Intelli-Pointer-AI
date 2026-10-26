@@ -97,6 +97,15 @@ const [appPath] = await packager({
 });
 console.log(`  built ${appPath}`);
 
+// Lighter install: Chromium ships ~55 UI language packs; the app is English-only.
+const localesDir = path.join(appPath, 'locales');
+for (const f of fs.existsSync(localesDir) ? fs.readdirSync(localesDir) : []) {
+  if (f !== 'en-US.pak') fs.rmSync(path.join(localesDir, f));
+}
+const dirSize = (dir) => fs.readdirSync(dir, { withFileTypes: true })
+  .reduce((n, e) => n + (e.isDirectory() ? dirSize(path.join(dir, e.name)) : fs.statSync(path.join(dir, e.name)).size), 0);
+console.log(`  app size: ${Math.round(dirSize(appPath) / 1048576)} MB`);
+
 // Boots a built exe in --smoke-test mode (no tray, hotkeys or selection helper)
 // and fails the run if any window or bundled library didn't load.
 function smokeTest(exePath, label) {
@@ -110,6 +119,7 @@ function smokeTest(exePath, label) {
     throw new Error(`${label}: the app did not start (no smoke-test report).`);
   }
   for (const c of report.checks) console.log(`  ${c.pass ? 'ok  ' : 'FAIL'} ${c.name}${c.pass || !c.detail ? '' : ` — ${c.detail}`}`);
+  if (report.memoryMB) console.log(`  footprint at idle: ${report.memoryMB} MB RAM across ${report.processes} processes, ${report.idleCpuPercent}% CPU`);
   if (!report.ok) throw new Error(`${label}: smoke test failed.`);
   return report;
 }
