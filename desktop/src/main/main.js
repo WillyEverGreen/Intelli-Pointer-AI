@@ -305,6 +305,15 @@ function createTray() {
   tray.on('click', () => showPanel({ focus: true }));
 }
 
+// Written by scripts/install-app.mjs; absent when running from source.
+function buildInfo() {
+  try {
+    return require('../build-info.json');
+  } catch {
+    return { version: app.getVersion(), commit: 'source', builtAt: null };
+  }
+}
+
 // ---------- IPC ----------
 
 const fromPanel = (e) => panel && e.sender === panel.webContents;
@@ -335,7 +344,7 @@ function registerIpc() {
     if (fromBubble(e)) bubbleHover = Boolean(inside);
   });
 
-  handlePanel('settings:get', () => ({ ...settings.get(), latencyFile: latency.file() }));
+  handlePanel('settings:get', () => ({ ...settings.get(), latencyFile: latency.file(), build: buildInfo() }));
   handlePanel('settings:update', (_e, patch) => {
     const next = settings.update(patch);
     const failed = registerHotkeys();

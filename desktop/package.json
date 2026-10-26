@@ -8,21 +8,9 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "dist": "electron-builder --win portable"
-  },
-  "build": {
-    "appId": "dev.intellipointer.desktop",
-    "files": [
-      "src/**/*",
-      "package.json",
-      "node_modules/**/*"
-    ],
-    "asarUnpack": [
-      "src/main/native/**"
-    ],
-    "win": {
-      "target": "portable"
-    }
+    "icons": "node scripts/build-icons.js",
+    "app:build": "node scripts/install-app.mjs --build-only",
+    "app:install": "node scripts/install-app.mjs"
   },
   "dependencies": {
     "@highlightjs/cdn-assets": "^11.12.0",
@@ -31,6 +19,7 @@
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
+    "@electron/packager": "^20.3.0",
     "electron": "^45.0.0",
     "lucide-static": "^1.61.0"
   }

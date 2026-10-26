@@ -482,6 +482,8 @@
       if (el.type === 'checkbox') el.checked = settings[f];
       else el.value = settings[f];
     }
+    const b = settings.build || {};
+    $('version').textContent = `Version ${b.version || '?'} · ${b.commit === 'source' ? 'running from source' : `build ${b.commit}`}${b.builtAt ? ` · ${new Date(b.builtAt).toLocaleString()}` : ''}`;
     $('chat-view').hidden = true;
     $('settings-view').hidden = false;
     $('btn-settings').setAttribute('aria-pressed', 'true');
