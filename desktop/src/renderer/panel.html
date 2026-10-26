@@ -11,7 +11,7 @@
 </head>
 <body>
   <header id="titlebar">
-    <span class="app-name">IntelliPointer</span>
+    <span class="brand"><span class="logo" aria-hidden="true"></span><span class="app-name">IntelliPointer</span></span>
     <div class="model-picker">
       <select id="model" class="select" title="Model" aria-label="Model"></select>
     </div>
@@ -26,16 +26,24 @@
 
   <main id="chat-view">
     <section id="context" hidden aria-label="Attached context">
-      <div id="thumbs"></div>
-      <div class="context-side">
-        <div id="ocr-status" class="meta"></div>
-        <label class="inline-switch"><input type="checkbox" class="switch" id="send-image" checked /> Image</label>
-        <label class="inline-switch"><input type="checkbox" class="switch" id="send-ocr" checked /> OCR text</label>
-      </div>
-      <div class="context-actions">
-        <button id="btn-add-region" class="btn ghost" data-icon="plus" title="Capture another region into this conversation">Add region</button>
-        <button id="btn-replace" class="btn ghost" data-icon="refresh-cw" title="Capture a new region and start over">Replace</button>
-        <button id="btn-new" class="btn ghost" data-icon="x" title="Remove the context and start over">Clear</button>
+      <div class="context-card">
+        <div class="context-head">
+          <span id="context-kind" class="context-kind"></span>
+          <span id="ocr-status" class="meta"></span>
+          <span class="spacer"></span>
+          <button id="btn-add-region" class="icon-btn small" data-icon="plus" title="Add another screen region"></button>
+          <button id="btn-replace" class="icon-btn small" data-icon="refresh-cw" title="Replace with a new capture"></button>
+          <button id="btn-new" class="icon-btn small" data-icon="x" title="Remove context"></button>
+        </div>
+        <div id="thumbs"></div>
+        <div id="clip" hidden>
+          <div id="clip-text" class="clip-text"></div>
+          <button id="clip-more" class="link-btn" hidden>Show more</button>
+        </div>
+        <div id="context-options" class="context-options">
+          <label class="inline-switch"><input type="checkbox" class="switch" id="send-image" checked /> Send image</label>
+          <label class="inline-switch"><input type="checkbox" class="switch" id="send-ocr" checked /> Send OCR text</label>
+        </div>
       </div>
     </section>
 
@@ -43,6 +51,7 @@
 
     <section id="conversation" aria-live="polite">
       <div id="empty">
+        <span class="logo large" aria-hidden="true"></span>
         <h1>Ask about anything on your screen</h1>
         <dl class="shortcuts">
           <dt><kbd id="hk-capture">Ctrl+Shift+Space</kbd></dt>
@@ -71,32 +80,85 @@
 
   <main id="settings-view" hidden>
     <section class="settings-section">
-      <h2>Account</h2>
-      <div id="auth-out">
-        <label class="field">Email <input id="email" class="input" type="email" autocomplete="username" /></label>
-        <label class="field">Password <input id="password" class="input" type="password" autocomplete="current-password" /></label>
-        <div class="row">
-          <button id="btn-signin" class="btn primary">Sign in</button>
-          <button id="btn-signup" class="btn">Create account</button>
-        </div>
+      <h2>Models</h2>
+      <div class="segmented" role="tablist" aria-label="Model source">
+        <button role="tab" data-prov-tab="gemini">Gemini</button>
+        <button role="tab" data-prov-tab="groq">Groq</button>
+        <button role="tab" data-prov-tab="local">Local server</button>
+        <button role="tab" data-prov-tab="cloud">Cloud</button>
       </div>
-      <div id="auth-in" hidden>
-        <div class="account-row">
-          <div>
-            <div id="who" class="strong"></div>
-            <div id="usage" class="meta"></div>
-          </div>
-          <button id="btn-signout" class="btn" data-icon="log-out">Sign out</button>
-        </div>
-      </div>
-      <p id="auth-msg" class="meta"></p>
-    </section>
 
-    <section class="settings-section">
-      <h2>Connection</h2>
-      <label class="field">Backend URL <input id="s-backendUrl" class="input" placeholder="https://your-api.onrender.com" /></label>
-      <label class="field">Firebase Web API key <input id="s-firebaseApiKey" class="input" placeholder="AIza…" />
-        <span class="help">Public project identifier from Firebase project settings. Not a secret.</span></label>
+      <div class="prov-pane" data-prov="gemini" hidden>
+        <p class="help">Calls Google directly with your own key. Get a free key at aistudio.google.com/apikey.</p>
+        <label class="field">API key
+          <span class="key-row"><input class="input" type="password" data-role="key" autocomplete="off" spellcheck="false" placeholder="Paste a Gemini API key" /><span class="key-hint" data-role="hint"></span></span>
+        </label>
+        <div class="row"><button class="btn" data-role="load" data-icon="refresh-cw">Load models</button><button class="btn ghost" data-role="remove">Remove key</button></div>
+        <p class="meta" data-role="status"></p>
+        <div class="model-picker-list" data-role="picker" hidden>
+          <input class="input" data-role="filter" placeholder="Filter models" />
+          <div class="model-list" data-role="list"></div>
+        </div>
+      </div>
+
+      <div class="prov-pane" data-prov="groq" hidden>
+        <p class="help">Calls Groq directly with your own key. Create one at console.groq.com/keys. Llama 4 models can read images.</p>
+        <label class="field">API key
+          <span class="key-row"><input class="input" type="password" data-role="key" autocomplete="off" spellcheck="false" placeholder="Paste a Groq API key" /><span class="key-hint" data-role="hint"></span></span>
+        </label>
+        <div class="row"><button class="btn" data-role="load" data-icon="refresh-cw">Load models</button><button class="btn ghost" data-role="remove">Remove key</button></div>
+        <p class="meta" data-role="status"></p>
+        <div class="model-picker-list" data-role="picker" hidden>
+          <input class="input" data-role="filter" placeholder="Filter models" />
+          <div class="model-list" data-role="list"></div>
+        </div>
+      </div>
+
+      <div class="prov-pane" data-prov="local" hidden>
+        <p class="help">Any OpenAI-compatible server on this PC or your network, such as 9Router, Ollama or LM Studio.</p>
+        <label class="field">Server URL <input class="input" data-role="url" spellcheck="false" placeholder="http://127.0.0.1:11434/v1" /></label>
+        <div class="presets"><span class="help">Presets</span>
+          <button class="btn" data-preset="http://127.0.0.1:20128/v1" data-name="9Router">9Router</button>
+          <button class="btn" data-preset="http://127.0.0.1:11434/v1" data-name="Ollama">Ollama</button>
+          <button class="btn" data-preset="http://127.0.0.1:1234/v1" data-name="LM Studio">LM Studio</button>
+        </div>
+        <label class="field">Display name <input class="input" data-role="label" placeholder="Local" /></label>
+        <label class="field">API key (optional)
+          <span class="key-row"><input class="input" type="password" data-role="key" autocomplete="off" spellcheck="false" placeholder="Only if your server requires one" /><span class="key-hint" data-role="hint"></span></span>
+        </label>
+        <div class="row"><button class="btn" data-role="load" data-icon="refresh-cw">Load models</button><button class="btn ghost" data-role="remove">Remove key</button></div>
+        <p class="meta" data-role="status"></p>
+        <div class="model-picker-list" data-role="picker" hidden>
+          <input class="input" data-role="filter" placeholder="Filter models" />
+          <div class="model-list" data-role="list"></div>
+        </div>
+      </div>
+
+      <div class="prov-pane" data-prov="cloud" hidden>
+        <label class="toggle-row"><span><span class="strong">Use IntelliPointer Cloud</span><span class="help">Your deployed backend: sign-in, quotas and server-side keys.</span></span><input type="checkbox" class="switch" id="s-cloudEnabled" /></label>
+        <label class="field">Backend URL <input id="s-backendUrl" class="input" placeholder="https://your-api.onrender.com" /></label>
+        <label class="field">Firebase Web API key <input id="s-firebaseApiKey" class="input" placeholder="AIza…" />
+          <span class="help">Public project identifier from Firebase project settings. Not a secret.</span></label>
+        <div id="auth-out">
+          <label class="field">Email <input id="email" class="input" type="email" autocomplete="username" /></label>
+          <label class="field">Password <input id="password" class="input" type="password" autocomplete="current-password" /></label>
+          <div class="row">
+            <button id="btn-signin" class="btn primary">Sign in</button>
+            <button id="btn-signup" class="btn">Create account</button>
+          </div>
+        </div>
+        <div id="auth-in" hidden>
+          <div class="account-row">
+            <div>
+              <div id="who" class="strong"></div>
+              <div id="usage" class="meta"></div>
+            </div>
+            <button id="btn-signout" class="btn" data-icon="log-out">Sign out</button>
+          </div>
+        </div>
+        <p id="auth-msg" class="meta"></p>
+      </div>
+      <p class="help">Keys are encrypted with Windows (DPAPI) and stay on this PC. Only the app's background process can read them.</p>
     </section>
 
     <section class="settings-section">
@@ -105,7 +167,7 @@
         <span class="help">Runs when you press Enter with an empty question.</span></label>
       <label class="toggle-row"><span><span class="strong">Ask bar on text selection</span><span class="help">Reads the selection on this PC. Nothing is sent until you click.</span></span><input type="checkbox" class="switch" id="s-selectionBubble" /></label>
       <label class="toggle-row"><span><span class="strong">Local OCR</span><span class="help">Extract text from captures on this PC.</span></span><input type="checkbox" class="switch" id="s-ocrEnabled" /></label>
-      <label class="toggle-row"><span><span class="strong">Local-only mode</span><span class="help">Never send screen content to the cloud.</span></span><input type="checkbox" class="switch" id="s-localOnly" /></label>
+      <label class="toggle-row"><span><span class="strong">Local-only mode</span><span class="help">Only use models on your local server. Nothing goes to cloud providers.</span></span><input type="checkbox" class="switch" id="s-localOnly" /></label>
       <label class="field">Conversation turns kept <input id="s-maxTurns" class="input narrow" type="number" min="1" max="50" /></label>
     </section>
 

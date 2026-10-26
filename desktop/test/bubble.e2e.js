@@ -51,18 +51,35 @@ app.whenReady().then(async () => {
   const h = (ch, fn) => ipcMain.handle(ch, fn);
   h('settings:get', () => settings.get());
   h('auth:status', () => ({ signedIn: false, secureStorage: true }));
-  h('models:list', () => [{ id: 'gemini/x', label: 'Google Gemini · x', vision: true, webSearch: true }]);
+  h('models:list', () => ({
+    models: [
+      { id: 'gemini:gemini-flash-latest', label: 'Gemini · gemini-flash-latest', group: 'Gemini (your key)', vision: true, webSearch: true, direct: true },
+      { id: 'groq:llama-3.3-70b-versatile', label: 'Groq · llama-3.3-70b-versatile', group: 'Groq (your key)', vision: false, webSearch: false, direct: true },
+    ],
+    errors: [],
+  }));
+  const providerStatus = () => ({
+    providers: settings.get().providers,
+    keys: { gemini: { set: true, hint: '…a1b2' }, groq: { set: false, hint: '' }, local: { set: false, hint: '' } },
+  });
+  h('providers:status', providerStatus);
+  h('providers:save', providerStatus);
+  h('providers:fetchModels', () => ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-pro-latest', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3.5-flash']
+    .map((id) => ({ id, vision: true })));
   for (const ch of ['settings:update', 'usage:get', 'ask:cancel', 'ask:start', 'clipboard:write', 'panel:pin', 'panel:resize', 'panel:hide', 'open:latencyLog', 'capture:start', 'auth:signIn', 'auth:signOut']) h(ch, () => null);
   const panel = new BrowserWindow({ width: 460, height: 600, frame: false, alwaysOnTop: true, webPreferences: { preload: path.join(__dirname, '..', 'src', 'preload', 'panel.js'), contextIsolation: true, sandbox: true } });
   watch(panel);
   await panel.loadFile(path.join(__dirname, '..', 'src', 'renderer', 'panel.html'));
   await wait(500);
-  panel.webContents.send('context:add', { contextId: 'c1', mode: 'replace', kind: 'selection', images: [], text: 'Report is a draft written against your rubric.', action: null });
-  await wait(300);
-  const st = await panel.webContents.executeJavaScript(`({ status: document.getElementById('ocr-status').textContent, privacy: document.getElementById('privacy').textContent, clip: document.querySelector('.clip-text')?.textContent })`);
-  check(st.status === 'Selected text attached', `panel status: "${st.status}"`);
-  check(/selected text/.test(st.privacy), `privacy notice: "${st.privacy}"`);
-  check(st.clip === 'Report is a draft written against your rubric.', 'selected text shown in the panel');
+  const longText = 'Android: Go to Settings > Network & internet > Internet (or Connections > Data usage) to see total mobile and Wi-Fi data consumption, set alerts, and review app-by-app usage. iPhone: Settings > Mobile Data shows usage per app since the last reset.';
+  panel.webContents.send('context:add', { contextId: 'c1', mode: 'replace', kind: 'selection', images: [], text: longText, action: null });
+  await wait(400);
+  const st = await panel.webContents.executeJavaScript(`({ kind: document.getElementById('context-kind').textContent, privacy: document.getElementById('privacy').textContent, clip: document.getElementById('clip-text').textContent, more: !document.getElementById('clip-more').hidden, options: document.getElementById('context-options').hidden })`);
+  check(st.kind === 'Selected text', `context card title: "${st.kind}"`);
+  check(/selected text/.test(st.privacy) && /directly/.test(await panel.webContents.executeJavaScript(`document.getElementById('privacy').title`)), `privacy notice: "${st.privacy}"`);
+  check(st.clip === longText, 'selected text shown in the panel');
+  check(st.more, 'long text is clamped with a Show more link');
+  check(st.options, 'image/OCR switches hidden for text-only context');
   const hasSetting = await panel.webContents.executeJavaScript(`!!document.getElementById('s-selectionBubble')`);
   check(hasSetting, 'settings has the Ask-AI-bar toggle');
 
@@ -75,7 +92,14 @@ app.whenReady().then(async () => {
   await snap('panel-empty');
   await panel.webContents.executeJavaScript(`document.getElementById('btn-settings').click()`);
   await wait(400);
+  await panel.webContents.executeJavaScript(`document.querySelector('.prov-pane[data-prov="gemini"] [data-role="load"]').click()`);
+  await wait(400);
+  const picked = await panel.webContents.executeJavaScript(`[...document.querySelectorAll('.prov-pane[data-prov="gemini"] .model-row')].filter((r) => r.querySelector('input').checked).map((r) => r.textContent.replace('Images', '').trim())`);
+  check(picked.join() === 'gemini-flash-latest,gemini-flash-lite-latest,gemini-pro-latest', `Load models preselects sensible defaults (${picked.join(', ')})`);
   await snap('panel-settings');
+  await panel.webContents.executeJavaScript(`document.querySelector('[data-prov-tab="local"]').click()`);
+  await wait(200);
+  await snap('panel-settings-local');
 
   check(errors.length === 0, `no renderer console errors ${errors.join(' | ')}`);
   console.log(failures.length ? `\n${failures.length} FAILED` : '\nALL PASSED');

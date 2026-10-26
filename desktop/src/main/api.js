@@ -2,10 +2,11 @@ const crypto = require('node:crypto');
 const settings = require('./settings');
 const auth = require('./auth');
 const { createSseParser } = require('./sse');
+const providers = require('./providers');
 
-// Client for the IntelliPointer cloud API. Runs in the main process so the
-// auth token never reaches a renderer, and so requests are not subject to
-// renderer CORS rules.
+// Model client: the IntelliPointer cloud API ("cloud:" model ids) and direct
+// providers (providers.js). Runs in the main process so auth tokens and API
+// keys never reach a renderer, and requests are not subject to CORS.
 
 let active = null; // { reqId, controller }
 const answerCache = new Map(); // text-only dictionary lookups, LRU-ish
@@ -58,9 +59,24 @@ async function request(pathname, init = {}, { retried = false } = {}) {
   });
 }
 
+// All selectable models: IntelliPointer Cloud (if enabled) plus the direct
+// providers the user configured. A failing source doesn't hide the others.
 async function listModels() {
-  const res = await request('/v1/models');
-  return (await res.json()).models;
+  const s = settings.get();
+  const models = providers.listModels();
+  const errors = [];
+  if (s.providers.cloud.enabled && s.backendUrl) {
+    try {
+      const res = await request('/v1/models', { signal: AbortSignal.timeout(8000) });
+      const cloud = (await res.json()).models.map((m) => ({
+        ...m, id: `cloud:${m.id}`, group: 'IntelliPointer Cloud', direct: false, local: false,
+      }));
+      models.unshift(...cloud);
+    } catch (err) {
+      errors.push({ source: 'IntelliPointer Cloud', message: err.message });
+    }
+  }
+  return { models, errors };
 }
 
 async function usage() {
@@ -100,43 +116,19 @@ async function ask({ reqId, body, cacheable }, onEvent) {
     return { outcome: 'cached', timings };
   }
 
-  const payload = JSON.stringify(body);
+  const isCloud = body.model.startsWith('cloud:');
+  const payload = JSON.stringify(isCloud ? { ...body, model: body.model.slice('cloud:'.length) } : body);
   timings.uploadBytes = Buffer.byteLength(payload);
   let fullText = '';
   let outcome = 'ok';
   let serverTimings = null;
 
   try {
-    const res = await request('/v1/ask', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: payload,
-      signal: controller.signal,
-    });
-    timings.requestToHeadersMs = Math.round(performance.now() - t0);
-
-    const parse = createSseParser((event, raw) => {
-      let data;
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        return;
-      }
-      if (event === 'delta') {
-        if (timings.firstTokenMs === null) timings.firstTokenMs = Math.round(performance.now() - t0);
-        fullText += data.text;
-      }
-      if (event === 'error') outcome = 'upstream_error';
-      if (event === 'done') {
-        serverTimings = data.timings;
-        timings.totalMs = Math.round(performance.now() - t0);
-        data = { ...data, clientTimings: timings };
-      }
-      onEvent(event, data);
-    });
-
-    const decoder = new TextDecoder();
-    for await (const chunk of res.body) parse(decoder.decode(chunk, { stream: true }));
+    if (!isCloud) {
+      fullText = await askDirect(body, controller.signal, timings, t0, onEvent);
+    } else {
+      fullText = await askCloud(payload, controller.signal, timings, t0, onEvent, (t) => { serverTimings = t; }, () => { outcome = 'upstream_error'; });
+    }
     if (key && outcome === 'ok' && fullText) {
       answerCache.set(key, fullText);
       if (answerCache.size > CACHE_MAX) answerCache.delete(answerCache.keys().next().value);
@@ -154,6 +146,63 @@ async function ask({ reqId, body, cacheable }, onEvent) {
   }
   timings.totalMs ??= Math.round(performance.now() - t0);
   return { outcome, timings, serverTimings };
+}
+
+// Direct provider (Gemini / Groq / local): stream from the main process.
+async function askDirect(body, signal, timings, t0, onEvent) {
+  onEvent('meta', { model: body.model, direct: true });
+  let text = '';
+  let usage = { inputTokens: 0, outputTokens: 0 };
+  for await (const ev of providers.stream({ modelId: body.model, messages: body.messages, webSearch: body.webSearch, signal })) {
+    if (ev.type === 'delta') {
+      if (timings.firstTokenMs === null) timings.firstTokenMs = Math.round(performance.now() - t0);
+      text += ev.text;
+      onEvent('delta', { text: ev.text });
+    } else if (ev.type === 'sources') {
+      onEvent('sources', { items: ev.items });
+    } else if (ev.type === 'usage') {
+      usage = { inputTokens: ev.inputTokens, outputTokens: ev.outputTokens };
+    }
+  }
+  timings.totalMs = Math.round(performance.now() - t0);
+  onEvent('done', { usage, clientTimings: timings });
+  return text;
+}
+
+// IntelliPointer Cloud backend: relay its SSE events.
+async function askCloud(payload, signal, timings, t0, onEvent, setServerTimings, markError) {
+  let fullText = '';
+  const res = await request('/v1/ask', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: payload,
+    signal,
+  });
+  timings.requestToHeadersMs = Math.round(performance.now() - t0);
+
+  const parse = createSseParser((event, raw) => {
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (event === 'delta') {
+      if (timings.firstTokenMs === null) timings.firstTokenMs = Math.round(performance.now() - t0);
+      fullText += data.text;
+    }
+    if (event === 'error') markError();
+    if (event === 'done') {
+      setServerTimings(data.timings);
+      timings.totalMs = Math.round(performance.now() - t0);
+      data = { ...data, clientTimings: timings };
+    }
+    onEvent(event, data);
+  });
+
+  const decoder = new TextDecoder();
+  for await (const chunk of res.body) parse(decoder.decode(chunk, { stream: true }));
+  return fullText;
 }
 
 module.exports = { ask, cancel, listModels, usage, ApiError };

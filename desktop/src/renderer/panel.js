@@ -61,25 +61,37 @@
   // ---------- models ----------
 
   async function loadModels() {
+    let errors = [];
     try {
-      models = await window.ip.listModels();
-      const sel = $('model');
-      const keep = sel.value || settings.defaultModel;
-      sel.innerHTML = '';
-      for (const m of models) {
-        const o = document.createElement('option');
-        o.value = m.id;
-        o.textContent = `${modelName(m)}${m.vision ? '' : ' (text only)'}`;
-        o.title = m.label;
-        sel.appendChild(o);
-      }
-      if (models.some((m) => m.id === keep)) sel.value = keep;
-      if (!models.length) banner('The backend has no models configured.');
-      else banner('');
+      ({ models, errors } = await window.ip.listModels());
     } catch (err) {
       models = [];
-      $('model').innerHTML = '<option value="">Not connected</option>';
-      banner(cleanErr(err), { label: 'Settings', onClick: openSettings });
+      errors = [{ source: 'Models', message: cleanErr(err) }];
+    }
+    const sel = $('model');
+    const keep = sel.value || settings.defaultModel;
+    sel.innerHTML = '';
+    const groups = new Map();
+    for (const m of models) {
+      if (!groups.has(m.group)) {
+        const g = document.createElement('optgroup');
+        g.label = m.group;
+        groups.set(m.group, g);
+        sel.appendChild(g);
+      }
+      const o = document.createElement('option');
+      o.value = m.id;
+      o.textContent = `${modelName(m)}${m.vision ? '' : ' (text only)'}`;
+      o.title = m.label;
+      groups.get(m.group).appendChild(o);
+    }
+    if (models.some((m) => m.id === keep)) sel.value = keep;
+    if (!models.length) {
+      sel.innerHTML = '<option value="">No model selected</option>';
+      const why = errors.length ? errors.map((e) => `${e.source}: ${e.message}`).join(' ') : 'Add a Gemini or Groq key, or a local server, to choose models.';
+      banner(why, { label: 'Settings', onClick: openSettings });
+    } else {
+      banner('');
     }
     updatePrivacy();
   }
@@ -114,23 +126,36 @@
       d.append(i, s);
       thumbs.appendChild(d);
     }
-    if (context.clipText) {
-      const t = document.createElement('div');
-      t.className = 'clip-text';
-      t.textContent = context.clipText;
-      thumbs.appendChild(t);
-    }
+    // Header: what is attached.
+    const n = context.images.length;
+    const kindLabel = n
+      ? `${n} screen region${n > 1 ? 's' : ''}`
+      : context.kind === 'selection' ? 'Selected text' : 'Clipboard text';
+    $('context-kind').innerHTML = window.ipIcon(n ? 'image' : 'type', 14);
+    $('context-kind').append(kindLabel);
+
+    // Text excerpt, clamped to three lines with a toggle.
+    const clipText = $('clip-text');
+    $('clip').hidden = !context.clipText;
+    clipText.textContent = context.clipText || '';
+    clipText.className = `clip-text ${context.clipExpanded ? 'expanded' : 'clamped'}`;
+    requestAnimationFrame(() => {
+      const overflowing = context?.clipExpanded || clipText.scrollHeight > clipText.clientHeight + 2;
+      $('clip-more').hidden = !overflowing;
+      $('clip-more').textContent = context?.clipExpanded ? 'Show less' : 'Show more';
+    });
+
     const o = context.ocr;
     const st = $('ocr-status');
-    if (!context.images.length) st.textContent = context.kind === 'selection' ? 'Selected text attached' : 'Clipboard text attached';
+    if (!n) st.textContent = `${context.clipText.split(/\s+/).filter(Boolean).length} words`;
     else if (o.status === 'pending') st.textContent = 'Recognising text…';
     else if (o.status === 'error') st.textContent = o.error;
-    else if (o.status === 'off') st.textContent = 'OCR is off';
+    else if (o.status === 'off') st.textContent = 'OCR off';
     else st.textContent = o.text ? `${o.text.split(/\s+/).length} words recognised · ${o.confidence}%` : 'No text recognised';
     st.title = o.text || '';
     $('send-ocr').disabled = !o.text;
-    $('send-image').closest('label').hidden = !context.images.length;
-    $('send-ocr').closest('label').hidden = !context.images.length;
+    $('context-options').hidden = !n;
+    $('btn-add-region').hidden = !n;
     updatePrivacy();
   }
 
@@ -144,8 +169,8 @@
       p.appendChild(s);
       p.title = title;
     };
-    if (settings.localOnly) {
-      show('lock', 'Local-only mode', 'Local-only mode is on: nothing is sent. Turn it off in Settings to ask the model.');
+    if (settings.localOnly && !m?.local) {
+      show('lock', 'Local-only mode', 'Local-only mode is on: only models on your local server can be used.');
       return;
     }
     const parts = [];
@@ -154,9 +179,11 @@
     if (context?.clipText) parts.push(context.kind === 'selection' ? 'selected text' : 'clipboard text');
     const provider = m ? m.label.split(' · ')[0] : 'the model provider';
     const what = parts.length ? `${parts.join(', ')} and your question` : 'your question';
-    let note = `Sends ${what} to ${provider} through your backend.`;
+    const route = !m ? '' : m.local ? ' (your local server)' : m.direct ? ' directly' : ' through IntelliPointer Cloud';
+    let note = `Sends ${what} to ${provider}${route}.`;
     if (context?.images.length && m && !m.vision) note += ' This model is text-only, so images are not sent.';
-    show('cloud', parts.length ? `Sends ${parts.join(', ')}` : `Sends to ${provider}`, note);
+    const short = parts.length ? `Sends ${parts.join(', ')}` : `Sends to ${provider}`;
+    show(m?.local ? 'lock' : 'cloud', m?.local ? `${short} locally` : short, note);
   }
 
   window.ip.onContext((d) => {
@@ -250,8 +277,8 @@
   async function send(question, { cacheable = false, webSearch = webSearchOn() } = {}) {
     question = question.trim();
     if (!question) return;
-    if (settings.localOnly) {
-      banner('Local-only mode is on, so nothing is sent.', { label: 'Settings', onClick: openSettings });
+    if (settings.localOnly && !selectedModel()?.local) {
+      banner('Local-only mode is on. Choose a model from your local server.', { label: 'Settings', onClick: openSettings });
       return;
     }
     const model = selectedModel();
@@ -475,8 +502,154 @@
     }
   }
 
+  // ---------- settings: model sources ----------
+
+  const PROVS = ['gemini', 'groq', 'local'];
+  const provDraft = {}; // { [prov]: { rows: Map(id -> { use, vision }), removeKey } }
+  const pane = (p) => document.querySelector(`.prov-pane[data-prov="${p}"]`);
+  const role = (p, r) => pane(p).querySelector(`[data-role="${r}"]`);
+
+  function selectProvTab(p) {
+    for (const b of document.querySelectorAll('[data-prov-tab]')) b.setAttribute('aria-selected', String(b.dataset.provTab === p));
+    for (const el of document.querySelectorAll('.prov-pane')) el.hidden = el.dataset.prov !== p;
+  }
+
+  function setProvStatus(p, text, isError = false) {
+    const s = role(p, 'status');
+    s.textContent = text;
+    s.classList.toggle('error-text', isError);
+  }
+
+  function updateModelCount(p) {
+    const rows = [...provDraft[p].rows.values()];
+    const used = rows.filter((r) => r.use).length;
+    setProvStatus(p, rows.length ? `${used} of ${rows.length} models shown in the model menu.` : '');
+  }
+
+  function renderModelList(p) {
+    const draft = provDraft[p];
+    const list = role(p, 'list');
+    const filter = role(p, 'filter').value.trim().toLowerCase();
+    role(p, 'picker').hidden = draft.rows.size === 0;
+    list.innerHTML = '';
+    const ids = [...draft.rows.keys()].filter((id) => id.toLowerCase().includes(filter));
+    if (!ids.length && draft.rows.size) list.innerHTML = '<div class="model-empty">No models match.</div>';
+    for (const id of ids) {
+      const row = draft.rows.get(id);
+      const el = document.createElement('div');
+      el.className = 'model-row';
+      const use = document.createElement('label');
+      use.className = 'model-use';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = row.use;
+      cb.addEventListener('change', () => {
+        row.use = cb.checked;
+        updateModelCount(p);
+      });
+      const name = document.createElement('span');
+      name.className = 'model-id';
+      name.textContent = id;
+      name.title = id;
+      use.append(cb, name);
+      const vision = document.createElement('button');
+      vision.type = 'button';
+      vision.className = 'vision-toggle';
+      vision.title = 'Whether this model can read images (screen captures)';
+      vision.setAttribute('aria-pressed', String(row.vision));
+      vision.innerHTML = window.ipIcon('image', 12);
+      vision.append('Images');
+      vision.addEventListener('click', () => {
+        row.vision = !row.vision;
+        vision.setAttribute('aria-pressed', String(row.vision));
+      });
+      el.append(use, vision);
+      list.appendChild(el);
+    }
+    updateModelCount(p);
+  }
+
+  async function loadProviderSettings() {
+    const status = await window.ip.providerStatus();
+    $('s-cloudEnabled').checked = status.providers.cloud.enabled;
+    for (const p of PROVS) {
+      provDraft[p] = { rows: new Map(status.providers[p].models.map((m) => [m.id, { use: true, vision: m.vision }])), removeKey: false };
+      role(p, 'key').value = '';
+      role(p, 'hint').textContent = status.keys[p].set ? `Saved ${status.keys[p].hint}` : '';
+      role(p, 'remove').hidden = !status.keys[p].set;
+      role(p, 'filter').value = '';
+      renderModelList(p);
+      const configured = p === 'local' ? Boolean(status.providers.local.baseUrl) : status.keys[p].set;
+      if (configured && !provDraft[p].rows.size) setProvStatus(p, 'Click Load models to choose which models to use.');
+    }
+    role('local', 'url').value = status.providers.local.baseUrl;
+    role('local', 'label').value = status.providers.local.label === 'Local' ? '' : status.providers.local.label;
+    // Dot on tabs that are set up.
+    for (const b of document.querySelectorAll('[data-prov-tab]')) {
+      const p = b.dataset.provTab;
+      const on = p === 'cloud' ? status.providers.cloud.enabled : p === 'local' ? Boolean(status.providers.local.baseUrl) : status.keys[p].set;
+      b.querySelector('.dot')?.remove();
+      if (on) b.insertAdjacentHTML('beforeend', '<span class="dot" title="Set up"></span>');
+    }
+    return status;
+  }
+
+  // First load: tick a few sensible defaults so the model menu isn't empty.
+  function preselect(p, fetched) {
+    const prefer = {
+      gemini: [/^gemini-flash-latest$/, /^gemini-flash-lite-latest$/, /^gemini-pro-latest$/],
+      groq: [/llama-4-scout/, /llama-3\.3-70b/, /llama-4-maverick/],
+      local: [],
+    }[p];
+    let picked = fetched.filter((m) => prefer.some((re) => re.test(m.id)));
+    if (!picked.length) picked = fetched.filter((m) => m.vision).concat(fetched);
+    for (const m of picked.slice(0, 3)) provDraft[p].rows.get(m.id).use = true;
+  }
+
+  async function fetchProviderModels(p) {
+    const btn = role(p, 'load');
+    btn.disabled = true;
+    setProvStatus(p, 'Loading models…');
+    try {
+      const opts = { apiKey: role(p, 'key').value.trim() || undefined };
+      if (p === 'local') opts.baseUrl = role(p, 'url').value.trim();
+      const fetched = await window.ip.fetchProviderModels(p, opts);
+      const draft = provDraft[p];
+      const anyUsed = [...draft.rows.values()].some((r) => r.use);
+      const merged = new Map();
+      for (const m of fetched) merged.set(m.id, draft.rows.get(m.id) || { use: false, vision: m.vision });
+      // Keep chosen models even if the server no longer lists them.
+      for (const [id, row] of draft.rows) if (row.use && !merged.has(id)) merged.set(id, row);
+      draft.rows = merged;
+      if (!anyUsed) preselect(p, fetched);
+      renderModelList(p);
+      if (!fetched.length) setProvStatus(p, 'The server returned no chat models.', true);
+    } catch (err) {
+      setProvStatus(p, cleanErr(err), true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function providerPatch() {
+    const patch = { cloud: { enabled: $('s-cloudEnabled').checked } };
+    for (const p of PROVS) {
+      const typed = role(p, 'key').value.trim();
+      patch[p] = { models: [...provDraft[p].rows].filter(([, r]) => r.use).map(([id, r]) => ({ id, vision: r.vision })) };
+      if (typed) patch[p].apiKey = typed;
+      else if (provDraft[p].removeKey) patch[p].apiKey = '';
+    }
+    patch.local.baseUrl = role('local', 'url').value.trim();
+    patch.local.label = role('local', 'label').value.trim();
+    return patch;
+  }
+
   async function openSettings() {
     settings = await window.ip.getSettings();
+    const status = await loadProviderSettings();
+    const firstSetUp = ['gemini', 'groq', 'local', 'cloud'].find((p) =>
+      p === 'cloud' ? false : p === 'local' ? status.providers.local.baseUrl : status.keys[p].set);
+    selectProvTab(firstSetUp || (status.providers.cloud.enabled && settings.firebaseApiKey ? 'cloud' : 'gemini'));
     for (const f of SETTING_FIELDS) {
       const el = $(`s-${f}`);
       if (el.type === 'checkbox') el.checked = settings[f];
@@ -506,8 +679,10 @@
     }
     try {
       const res = await window.ip.updateSettings(patch);
-      settings = res.settings;
+      await window.ip.saveProviders(providerPatch());
+      settings = await window.ip.getSettings();
       applySettings();
+      await loadProviderSettings();
       $('settings-msg').textContent = res.hotkeyErrors.length ? `Saved, but these hotkeys are taken: ${res.hotkeyErrors.join(', ')}` : 'Saved';
       loadModels();
     } catch (err) {
@@ -542,6 +717,42 @@
   // ---------- wiring ----------
 
   window.ipApplyIcons();
+  document.querySelectorAll('.logo').forEach((l) => l.setAttribute('role', 'presentation'));
+
+  for (const b of document.querySelectorAll('[data-prov-tab]')) b.addEventListener('click', () => selectProvTab(b.dataset.provTab));
+  for (const p of PROVS) {
+    role(p, 'load').addEventListener('click', () => fetchProviderModels(p));
+    role(p, 'filter').addEventListener('input', () => renderModelList(p));
+    role(p, 'key').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') fetchProviderModels(p);
+    });
+    role(p, 'remove').addEventListener('click', () => {
+      provDraft[p].removeKey = true;
+      role(p, 'key').value = '';
+      role(p, 'hint').textContent = 'Removed when you save';
+      role(p, 'remove').hidden = true;
+    });
+  }
+  for (const b of pane('local').querySelectorAll('[data-preset]')) {
+    b.addEventListener('click', () => {
+      role('local', 'url').value = b.dataset.preset;
+      role('local', 'label').value = b.dataset.name;
+      fetchProviderModels('local');
+    });
+  }
+  $('clip-more').addEventListener('click', () => {
+    if (!context) return;
+    context.clipExpanded = !context.clipExpanded;
+    renderContext();
+  });
+  // Mouse wheel scrolls the quick-action row sideways.
+  $('quick-actions').addEventListener('wheel', (e) => {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      $('quick-actions').scrollLeft += e.deltaY;
+      e.preventDefault();
+    }
+  }, { passive: false });
+
   for (const a of ACTIONS) {
     const b = document.createElement('button');
     b.className = 'btn';

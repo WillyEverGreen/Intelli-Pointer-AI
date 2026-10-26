@@ -90,6 +90,26 @@ npm start
 
 Then press **Ctrl+Shift+Space**. Drag over something, press **Enter**, and type a question (or click a quick action).
 
+## Choosing models (your own keys, a local server, or the cloud)
+
+Open **Settings → Models**. Each tab is one model source, and you can set up several at once. The model menu in the title bar groups them by source.
+
+| Source | What you enter | Notes |
+|---|---|---|
+| **Gemini** | API key from aistudio.google.com/apikey | Calls Google directly. All Gemini models read images, and web search is supported. |
+| **Groq** | API key from console.groq.com/keys | Calls Groq directly. Llama 4 models read images. |
+| **Local server** | URL of any OpenAI-compatible server. Presets for **9Router** (`:20128/v1`), **Ollama** (`:11434/v1`) and **LM Studio** (`:1234/v1`), plus an optional key | Plain HTTP is allowed only for this PC or your local network (`10.x`, `192.168.x`, `172.16–31.x`, `*.local`). |
+| **Cloud** | Backend URL, Firebase key, sign-in | Your deployed IntelliPointer API, with quotas and server-held keys. |
+
+To set up a source, click **Load models**. Tick the models you want in the menu (a few sensible ones are pre-selected), and use the **Images** toggle to say whether a model can read screen captures. Image support is guessed from the model name, so correct it if the guess is wrong. Text-only models get OCR text instead of images.
+
+**Key safety:**
+- Provider keys are encrypted with Windows DPAPI (`%APPDATA%\IntelliPointer AI\provider-keys.bin`).
+- They are used only by the app's main process. The UI only ever sees the last four characters.
+- Direct providers are called from your PC, so the cloud backend never sees those keys.
+
+**Local-only mode** restricts the app to local-server models, so nothing leaves your network.
+
 ## Install as a Windows app (and update it after changes)
 
 ```bash
@@ -206,7 +226,8 @@ Each answer shows `capture · OCR · upload size · first token · total`. Every
 cd backend && npm test                        # validation + auth enforcement (13 tests)
 cd desktop && npm test                        # SSE parser
 cd desktop && npx electron test/overlay.e2e.js   # overlay: drawing, move, undo, blur, crops at 1.5x DPI
-cd desktop && npx electron test/bubble.e2e.js    # Ask bar + selected text reaching the panel
+cd desktop && npx electron test/bubble.e2e.js    # Ask bar, context card, Models settings (IP_THEME=dark|light for screenshots)
+cd desktop && npx electron test/providers.e2e.js # key encryption, URL rules, local/OpenAI path; live Gemini/Groq if GEMINI_API_KEY / GROQ_API_KEY set
 # with a backend running on :8080:
 cd desktop && npx electron test/panel.e2e.js path\to\image.png   # real OCR + real streamed answer + follow-up
 ```

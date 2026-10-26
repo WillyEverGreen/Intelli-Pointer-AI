@@ -9,6 +9,8 @@ const ocr = require('./ocr');
 const api = require('./api');
 const latency = require('./latency');
 const selection = require('./selection');
+const secrets = require('./secrets');
+const providers = require('./providers');
 const { makeIcon } = require('./icon');
 
 const MAX_IMAGE_BYTES = 3.5 * 1024 * 1024; // backend limit is 4 MB decoded
@@ -360,6 +362,20 @@ function registerIpc() {
   handlePanel('auth:signIn', (_e, { email, password, create }) => auth.signIn(String(email), String(password), { create: Boolean(create) }));
   handlePanel('auth:signOut', () => auth.signOut());
   handlePanel('models:list', () => api.listModels());
+  handlePanel('providers:status', () => ({ providers: settings.get().providers, keys: secrets.status() }));
+  handlePanel('providers:fetchModels', (_e, provider, opts) => providers.fetchModels(String(provider), {
+    apiKey: typeof opts?.apiKey === 'string' ? opts.apiKey.trim() : undefined,
+    baseUrl: typeof opts?.baseUrl === 'string' ? opts.baseUrl.trim() : undefined,
+  }));
+  // patch: { cloud: { enabled }, gemini|groq|local: { apiKey?, models?, baseUrl?, label? } }
+  // apiKey: new key, '' to remove, undefined to keep.
+  handlePanel('providers:save', async (_e, patch) => {
+    for (const name of ['gemini', 'groq', 'local']) {
+      if (typeof patch?.[name]?.apiKey === 'string') await secrets.set(name, patch[name].apiKey);
+    }
+    settings.update({ providers: patch || {} });
+    return { providers: settings.get().providers, keys: secrets.status() };
+  });
   handlePanel('usage:get', () => api.usage());
   handlePanel('capture:start', (_e, mode) => startCapture(mode === 'append' ? 'append' : 'replace'));
   handlePanel('ask:cancel', (_e, reqId) => api.cancel(reqId));
@@ -377,7 +393,9 @@ function registerIpc() {
   handlePanel('open:latencyLog', () => shell.showItemInFolder(latency.file()));
 
   handlePanel('ask:start', async (e, { reqId, body, cacheable, meta }) => {
-    if (settings.get().localOnly) throw new Error('Local-only mode is on: nothing is sent to the cloud.');
+    if (settings.get().localOnly && !String(body?.model).startsWith('local:')) {
+      throw new Error('Local-only mode is on: choose a model from your local server, or turn the mode off in Settings.');
+    }
     const sender = e.sender;
     const result = await api.ask({ reqId, body, cacheable }, (event, data) => {
       if (!sender.isDestroyed()) sender.send('ask:event', { reqId, event, data });
@@ -444,6 +462,7 @@ async function runSmokeTest(outFile) {
 app.whenReady().then(async () => {
   app.setAppUserModelId('dev.intellipointer.desktop');
   await auth.restore();
+  await secrets.load();
   if (SMOKE_TEST_OUT) {
     createPanel();
     createBubble();

@@ -51,3 +51,7 @@ html, body {
   margin: 0 3px;
   background: var(--border);
 }
+
+#bar .logo {
+  --s: 14px;
+}
