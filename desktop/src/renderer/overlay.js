@@ -152,6 +152,12 @@
   function drawBlurs(ctx, s, ox, oy) {
     for (const op of ops) {
       if (op.type !== 'blur') continue;
+      if (!base) {
+        // Screenshot not here yet: show the redacted area as a solid block.
+        ctx.fillStyle = 'rgba(110,110,110,0.92)';
+        ctx.fillRect((op.x - ox) * s, (op.y - oy) * s, op.w * s, op.h * s);
+        continue;
+      }
       const sx = Math.round(op.x * k);
       const sy = Math.round(op.y * k);
       const sw = Math.max(1, Math.round(op.w * k));
@@ -217,13 +223,21 @@
   }
 
   function render() {
-    if (!dirty || !base) return;
+    if (!dirty) return;
     dirty = false;
     const dpr = devicePixelRatio;
     const W = view.width;
     const H = view.height;
     vctx.setTransform(1, 0, 0, 1, 0, 0);
-    vctx.drawImage(base, 0, 0, W, H);
+    if (base) {
+      vctx.drawImage(base, 0, 0, W, H);
+    } else {
+      // Live screen shows through until the screenshot arrives. A near-invisible
+      // fill keeps every pixel opaque to the mouse, so clicks never fall through.
+      vctx.clearRect(0, 0, W, H);
+      vctx.fillStyle = 'rgba(0,0,0,0.01)';
+      vctx.fillRect(0, 0, W, H);
+    }
     drawBlurs(vctx, dpr, 0, 0);
     drawAnnotations(vctx, dpr, 0, 0);
     if (drag?.preview && drag.preview.type !== 'region') drawAnnotations(vctx, dpr, 0, 0, [drag.preview]);
@@ -300,7 +314,7 @@
   const pt = (e) => [Math.max(0, Math.min(innerWidth, e.clientX)), Math.max(0, Math.min(innerHeight, e.clientY))];
 
   view.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0 || !base) return;
+    if (e.button !== 0 || !active) return;
     view.setPointerCapture(e.pointerId);
     const [x, y] = pt(e);
 
@@ -451,9 +465,18 @@
 
   let confirming = false;
   async function confirm(action) {
-    if (!base || confirming) return;
+    if (!active || confirming) return;
     confirming = true;
     try {
+      // The user may confirm before the screenshot lands (it takes ~250 ms).
+      if (!base) {
+        const arrived = await Promise.race([frameReady, new Promise((r) => setTimeout(() => r(false), 5000))]);
+        if (arrived === false || !base) {
+          console.error('Screen capture did not arrive in time');
+          window.overlay.cancel();
+          return;
+        }
+      }
       let regs = regions();
       if (!regs.length) regs = [{ type: 'region', shape: 'rect', x: 0, y: 0, w: innerWidth, h: innerHeight }];
       const out = [];
@@ -465,24 +488,17 @@
   }
 
   // Read-only snapshot for the automated overlay test.
-  window.__overlayState = () => JSON.parse(JSON.stringify({ tool, ops }));
+  window.__overlayState = () => JSON.parse(JSON.stringify({ tool, ops, active, hasFrame: Boolean(base) }));
 
   // ---------- lifecycle ----------
 
-  window.overlay.onStart(({ width, height, bitmap }) => {
-    // BGRA (Windows native) -> RGBA
-    const px = new Uint8ClampedArray(bitmap.buffer, bitmap.byteOffset, bitmap.byteLength);
-    for (let i = 0; i < px.length; i += 4) {
-      const b = px[i];
-      px[i] = px[i + 2];
-      px[i + 2] = b;
-      px[i + 3] = 255;
-    }
-    base = document.createElement('canvas');
-    base.width = width;
-    base.height = height;
-    base.getContext('2d').putImageData(new ImageData(px, width, height), 0, 0);
-    k = width / innerWidth;
+  let frameReady = Promise.resolve(false);
+  let resolveFrame = () => {};
+
+  // Overlay becomes visible: start a fresh session on the live (transparent) screen.
+  window.overlay.onShow(({ scaleFactor }) => {
+    base = null;
+    k = scaleFactor || devicePixelRatio;
     view.width = Math.round(innerWidth * devicePixelRatio);
     view.height = Math.round(innerHeight * devicePixelRatio);
     ops = [];
@@ -491,9 +507,33 @@
     drag = null;
     active = true;
     dirty = true;
+    frameReady = new Promise((r) => { resolveFrame = r; });
     toolbar.classList.remove('bottom');
     render();
-    requestAnimationFrame(() => window.overlay.ready());
+    // Two frames later the dimmed overlay is on screen: tell main to capture now.
+    requestAnimationFrame(() => requestAnimationFrame(() => window.overlay.shown()));
+  });
+
+  // The screenshot (taken behind the overlay) arrives: freeze it in place.
+  window.overlay.onFrame(({ width, height, bitmap }) => {
+    if (!active) return;
+    // BGRA (Windows native) -> RGBA
+    const px = new Uint8ClampedArray(bitmap.buffer, bitmap.byteOffset, bitmap.byteLength);
+    for (let i = 0; i < px.length; i += 4) {
+      const b = px[i];
+      px[i] = px[i + 2];
+      px[i + 2] = b;
+      px[i + 3] = 255;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext('2d').putImageData(new ImageData(px, width, height), 0, 0);
+    base = canvas;
+    k = width / innerWidth;
+    dirty = true;
+    render();
+    resolveFrame(true);
   });
 
   window.overlay.onReset(() => {
@@ -501,6 +541,7 @@
     base = null;
     ops = [];
     drag = null;
+    resolveFrame(false);
     vctx.clearRect(0, 0, view.width, view.height);
   });
 })();

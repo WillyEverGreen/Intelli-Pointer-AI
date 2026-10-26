@@ -69,14 +69,22 @@ app.whenReady().then(async () => {
   });
   await win.loadFile(path.join(__dirname, '..', 'src', 'renderer', 'overlay.html'));
 
-  const ready = new Promise((r) => ipcMain.once('overlay:ready', r));
   // Simulate a 1.5x-scaled display: physical bitmap is 1.5x the CSS size.
   const scale = 1.5;
   const pw = Math.round(W * scale);
   const ph = Math.round(H * scale);
-  win.webContents.send('overlay:start', { width: pw, height: ph, bitmap: syntheticBitmap(pw, ph), scaleFactor: scale });
-  await ready;
-  check(true, 'overlay painted and signalled ready');
+  // Instant path: the overlay is usable before the screenshot arrives.
+  win.webContents.send('overlay:show', { scaleFactor: scale });
+  await wait(100);
+  const before = await win.webContents.executeJavaScript('window.__overlayState()');
+  check(before.active && !before.hasFrame, 'overlay is active before the screenshot arrives');
+  await drag(win.webContents, 50, 60, 90, 100); // draw while still live
+  const early = await win.webContents.executeJavaScript('window.__overlayState()');
+  check(early.ops.length === 1, 'user can start selecting immediately');
+  await win.webContents.executeJavaScript("document.getElementById('clear').click()");
+  win.webContents.send('overlay:frame', { width: pw, height: ph, bitmap: syntheticBitmap(pw, ph) });
+  await wait(150);
+  check((await win.webContents.executeJavaScript('window.__overlayState()')).hasFrame, 'screenshot swapped in as the frozen background');
   win.focus();
   await wait(100);
 

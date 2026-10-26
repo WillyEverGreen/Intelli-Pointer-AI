@@ -3,7 +3,7 @@ html, body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #000;
+  background: transparent;
   cursor: crosshair;
   user-select: none;
   font: 13px/1.2 var(--font);

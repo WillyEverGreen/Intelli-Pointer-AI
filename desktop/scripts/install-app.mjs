@@ -35,13 +35,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 if (!args.has('--skip-tests')) {
   step('Running unit tests');
   execSync('npm test', { cwd: root, stdio: 'inherit' });
-  step('Testing the selected-text shortcut and clipboard handling');
   const electronBin = require('electron'); // path to the Electron executable
-  const r = spawnSync(electronBin, ['test/selection.e2e.js'], { cwd: root, encoding: 'utf8', timeout: 60000 });
-  const lines = `${r.stdout || ''}`.split(/\r?\n/).filter((l) => /^(PASS|FAIL)/.test(l));
-  for (const l of lines) console.log(`  ${l}`);
-  if (r.status !== 0 || !lines.length || lines.some((l) => l.startsWith('FAIL'))) {
-    throw new Error('Selected-text shortcut test failed; not installing.');
+  const appTests = [
+    ['Selected-text shortcut and clipboard handling', 'test/selection.e2e.js'],
+    ['Overlay leaves itself out of screenshots', 'test/capture-exclusion.e2e.js'],
+    ['Screen-region shortcut speed (briefly dims the screen)', 'test/capture.e2e.js'],
+  ];
+  for (const [label, file] of appTests) {
+    step(`Testing: ${label}`);
+    const r = spawnSync(electronBin, [file], { cwd: root, encoding: 'utf8', timeout: 90000 });
+    const lines = `${r.stdout || ''}`.split(/\r?\n/).filter((l) => /^(PASS|FAIL|\s+round|grab)/.test(l));
+    for (const l of lines) console.log(`  ${l.trim()}`);
+    if (r.status !== 0 || !lines.length || lines.some((l) => l.startsWith('FAIL'))) {
+      throw new Error(`${label}: test failed; not installing.`);
+    }
   }
 }
 

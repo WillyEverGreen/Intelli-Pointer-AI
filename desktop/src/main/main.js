@@ -30,8 +30,11 @@ let pinned = true;
 const SMOKE_TEST_OUT = (process.argv.find((a) => a.startsWith('--smoke-test=')) || '').slice('--smoke-test='.length);
 
 // The smoke test may run while the user's copy is open, so it skips the lock.
-if (!SMOKE_TEST_OUT && !app.requestSingleInstanceLock()) {
-  app.quit();
+// A second launch just shows the running copy's panel (see "second-instance")
+// and exits at once, before creating windows or touching the shortcuts.
+const isPrimary = Boolean(SMOKE_TEST_OUT) || app.requestSingleInstanceLock();
+if (!isPrimary) {
+  app.exit(0);
 }
 
 // ---------- floating panel ----------
@@ -377,7 +380,7 @@ function handlePanel(channel, fn) {
 }
 
 function registerIpc() {
-  ipcMain.on('overlay:ready', (e) => capture.onOverlayReady(e.sender));
+  ipcMain.on('overlay:shown', () => capture.onOverlayShown());
   ipcMain.on('overlay:confirm', (e, payload) => capture.onOverlayConfirm(e.sender, payload));
   ipcMain.on('overlay:cancel', () => capture.cancel());
 
@@ -507,6 +510,7 @@ async function runSmokeTest(outFile) {
 }
 
 app.whenReady().then(async () => {
+  if (!isPrimary) return;
   app.setAppUserModelId('dev.intellipointer.desktop');
   await auth.restore();
   await secrets.load();
