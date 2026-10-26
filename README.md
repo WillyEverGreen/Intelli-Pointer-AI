@@ -101,8 +101,10 @@ Or double-click **`Update IntelliPointer.cmd`** in the repo root. The same comma
 1. Runs the unit tests and stops if any fail.
 2. Regenerates the icon bundle and the `.exe` icon, and stamps the version and git commit.
 3. Packages the app with `@electron/packager` into `desktop/dist/`. The first run downloads the Electron runtime, about 100 MB.
-4. Closes the running copy, replaces `%LOCALAPPDATA%\Programs\IntelliPointer AI` (no admin rights needed), and refreshes the **Desktop** and **Start menu** shortcuts.
-5. Starts the new version. Add `-- --no-launch` to skip this, or `-- --skip-tests` for a faster rebuild.
+4. **Smoke-tests the build:** it starts the exe with `--smoke-test` (no tray, hotkeys or selection helper) and checks that every window, icon, library and the OCR engine loaded without errors. A broken build is never installed.
+5. Closes the running copy, replaces `%LOCALAPPDATA%\Programs\IntelliPointer AI` (no admin rights needed), and refreshes the **Desktop** and **Start menu** shortcuts. It reads each shortcut back to confirm it points at the installed exe.
+6. Smoke-tests the installed app again, launched from the shortcut's target.
+7. Starts the new version. Add `-- --no-launch` to skip this, or `-- --skip-tests` for a faster rebuild.
 
 Settings, sign-in and the latency log live in `%APPDATA%\IntelliPointer AI`, so they survive updates. **Settings → Privacy and diagnostics** shows the installed version and build commit; `+changes` means it was built from uncommitted work. `npm run app:build` only builds into `desktop/dist/` without installing.
 

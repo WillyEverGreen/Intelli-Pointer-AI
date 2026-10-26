@@ -18,7 +18,10 @@ let panel = null;
 let tray = null;
 let pinned = true;
 
-if (!app.requestSingleInstanceLock()) {
+const SMOKE_TEST_OUT = (process.argv.find((a) => a.startsWith('--smoke-test=')) || '').slice('--smoke-test='.length);
+
+// The smoke test may run while the user's copy is open, so it skips the lock.
+if (!SMOKE_TEST_OUT && !app.requestSingleInstanceLock()) {
   app.quit();
 }
 
@@ -398,9 +401,57 @@ function registerIpc() {
 
 // ---------- lifecycle ----------
 
+// `--smoke-test=<file>`: boot every window of an installed build, check that
+// its scripts and libraries loaded, write a JSON report and exit. Starts no
+// tray, hotkeys or selection helper. Used by scripts/install-app.mjs.
+async function runSmokeTest(outFile) {
+  const report = { ok: true, checks: [] };
+  const check = (name, pass, detail = '') => {
+    report.checks.push({ name, pass, detail });
+    if (!pass) report.ok = false;
+  };
+  const errors = [];
+  const wins = BrowserWindow.getAllWindows();
+  for (const w of wins) {
+    w.webContents.on('console-message', (e) => {
+      if (e.level === 'error' || e.level === 3) errors.push(`${path.basename(w.webContents.getURL().split('?')[0])}: ${e.message}`);
+    });
+  }
+  await Promise.all(wins.map((w) => (w.webContents.isLoading() ? new Promise((r) => w.webContents.once('did-finish-load', r)) : null)));
+  await new Promise((r) => setTimeout(r, 1500)); // let the panel finish its startup calls
+
+  for (const w of wins) {
+    const page = path.basename(w.webContents.getURL().split('?')[0]);
+    const libs = page === 'panel.html' ? "&& typeof marked === 'object' && typeof DOMPurify === 'function' && typeof hljs === 'object' && typeof window.ip === 'object'" : '';
+    const ok = await w.webContents.executeJavaScript(`typeof window.ipIcon === 'function' && document.querySelectorAll('svg.icon').length > 0 ${libs}`);
+    check(`${page} loaded with icons${libs ? ' and libraries' : ''}`, ok);
+  }
+  const pages = wins.map((w) => path.basename(w.webContents.getURL().split('?')[0]));
+  check('panel, overlay and Ask bar windows exist', ['panel.html', 'overlay.html', 'bubble.html'].every((p) => pages.includes(p)), pages.join(', '));
+  check('selection helper script present', require('node:fs').existsSync(path.join(__dirname, 'native', 'selection-helper.ps1')));
+  try {
+    require.resolve('tesseract.js');
+    check('OCR engine bundled', true);
+  } catch (err) {
+    check('OCR engine bundled', false, err.message);
+  }
+  check('no renderer console errors', errors.length === 0, errors.join(' | '));
+  report.build = buildInfo();
+  require('node:fs').writeFileSync(outFile, JSON.stringify(report, null, 2));
+  app.exit(report.ok ? 0 : 1);
+}
+
 app.whenReady().then(async () => {
   app.setAppUserModelId('dev.intellipointer.desktop');
   await auth.restore();
+  if (SMOKE_TEST_OUT) {
+    createPanel();
+    createBubble();
+    capture.init();
+    registerIpc();
+    await runSmokeTest(SMOKE_TEST_OUT);
+    return;
+  }
   createPanel();
   createBubble();
   capture.init();

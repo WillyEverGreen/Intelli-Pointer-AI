@@ -9,6 +9,7 @@
 // Installs to %LOCALAPPDATA%\Programs\IntelliPointer AI (no admin rights).
 // Settings and sign-in live in %APPDATA%\IntelliPointer AI and survive updates.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execSync, spawn, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -80,6 +81,26 @@ const [appPath] = await packager({
   quiet: true,
 });
 console.log(`  built ${appPath}`);
+
+// Boots a built exe in --smoke-test mode (no tray, hotkeys or selection helper)
+// and fails the run if any window or bundled library didn't load.
+function smokeTest(exePath, label) {
+  const out = path.join(os.tmpdir(), `intellipointer-smoke-${process.pid}.json`);
+  fs.rmSync(out, { force: true });
+  spawnSync(exePath, [`--smoke-test=${out}`], { timeout: 60000, stdio: 'ignore' });
+  let report;
+  try {
+    report = JSON.parse(fs.readFileSync(out, 'utf8'));
+  } catch {
+    throw new Error(`${label}: the app did not start (no smoke-test report).`);
+  }
+  for (const c of report.checks) console.log(`  ${c.pass ? 'ok  ' : 'FAIL'} ${c.name}${c.pass || !c.detail ? '' : ` — ${c.detail}`}`);
+  if (!report.ok) throw new Error(`${label}: smoke test failed.`);
+  return report;
+}
+
+step('Smoke-testing the build');
+smokeTest(path.join(appPath, `${APP}.exe`), 'Built app');
 if (buildOnly) process.exit(0);
 
 // 4. Stop the running copy (and its helper processes) so files can be replaced
@@ -104,25 +125,37 @@ const exe = path.join(installDir, `${APP}.exe`);
 
 // 6. Shortcuts (Desktop + Start menu). Paths go through env vars to avoid quoting issues.
 step('Updating Desktop and Start menu shortcuts');
+// Writes each shortcut, reads it back, and prints its target so the next step can verify it.
 const ps = `
 $shell = New-Object -ComObject WScript.Shell
 foreach ($dir in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) {
-  $lnk = $shell.CreateShortcut((Join-Path $dir ($env:IP_APP + '.lnk')))
+  $path = Join-Path $dir ($env:IP_APP + '.lnk')
+  $lnk = $shell.CreateShortcut($path)
   $lnk.TargetPath = $env:IP_EXE
   $lnk.WorkingDirectory = $env:IP_DIR
   $lnk.IconLocation = $env:IP_EXE + ',0'
   $lnk.Description = 'Ask about anything on your screen'
   $lnk.Save()
-  Write-Output ('  ' + (Join-Path $dir ($env:IP_APP + '.lnk')))
+  Write-Output ($path + '|' + $shell.CreateShortcut($path).TargetPath)
 }`;
 const res = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], {
   env: { ...process.env, IP_APP: APP, IP_EXE: exe, IP_DIR: installDir },
   encoding: 'utf8',
 });
-process.stdout.write(res.stdout || '');
-if (res.status !== 0) console.warn(`  Shortcut creation failed: ${(res.stderr || '').trim()}`);
+if (res.status !== 0) throw new Error(`Shortcut creation failed: ${(res.stderr || '').trim()}`);
+const shortcuts = res.stdout.trim().split(/\r?\n/).map((line) => line.split('|'));
+for (const [lnk, target] of shortcuts) {
+  const good = path.resolve(target) === path.resolve(exe);
+  console.log(`  ${good ? 'ok  ' : 'FAIL'} ${lnk}`);
+  if (!good) throw new Error(`${lnk} points to ${target}, expected ${exe}`);
+}
 
-// 7. Relaunch
+// 7. Launch the installed app exactly as the shortcut does.
+step('Verifying the installed app starts from the shortcut target');
+const report = smokeTest(shortcuts[0][1], 'Installed app');
+console.log(`  running build ${report.build.version} (${report.build.commit})`);
+
+// 8. Relaunch
 if (!args.has('--no-launch')) {
   step('Starting IntelliPointer');
   spawn(exe, [], { detached: true, stdio: 'ignore', cwd: installDir }).unref();
