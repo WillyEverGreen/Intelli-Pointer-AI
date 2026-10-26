@@ -1,0 +1,26 @@
+# Render Blueprint (https://render.com/docs/blueprint-spec) — free web service.
+# Secrets marked `sync: false` are entered in the Render dashboard, never committed.
+services:
+  - type: web
+    name: intellipointer-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci --omit=dev
+    startCommand: node src/server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DAILY_REQUEST_LIMIT
+        value: "100"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "20"

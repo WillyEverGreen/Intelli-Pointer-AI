@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;" />
+  <title>IntelliPointer selection</title>
+  <link rel="stylesheet" href="overlay.css" />
+</head>
+<body>
+  <canvas id="view"></canvas>
+
+  <div id="toolbar" role="toolbar" aria-label="Selection tools">
+    <div class="group" id="tools">
+      <button data-tool="rect" title="Rectangle (R) — hold Shift for a square">▭<span>R</span></button>
+      <button data-tool="square" title="Square (S)">□<span>S</span></button>
+      <button data-tool="ellipse" title="Circle / ellipse (E) — hold Shift for a circle">◯<span>E</span></button>
+      <button data-tool="lasso" title="Freehand lasso (L)">➰<span>L</span></button>
+      <button data-tool="pen" title="Annotation pen (P)">✎<span>P</span></button>
+      <button data-tool="arrow" title="Arrow (A)">➚<span>A</span></button>
+      <button data-tool="highlight" title="Highlighter (H)">▮<span>H</span></button>
+      <button data-tool="blur" title="Blur sensitive area (B) — pixelates before anything is sent">▒<span>B</span></button>
+    </div>
+    <div class="group">
+      <input id="width" type="range" min="2" max="16" value="4" title="Pen thickness" />
+      <button class="swatch" data-color="#ef4444" title="Red"></button>
+      <button class="swatch" data-color="#22c55e" title="Green"></button>
+      <button class="swatch" data-color="#3b82f6" title="Blue"></button>
+      <button class="swatch" data-color="#facc15" title="Yellow"></button>
+    </div>
+    <div class="group">
+      <button id="undo" title="Undo (Ctrl+Z)">↶</button>
+      <button id="redo" title="Redo (Ctrl+Y)">↷</button>
+      <button id="clear" title="Clear everything">✕ Clear</button>
+      <label class="toggle" title="White-out everything outside circles / lassos (M)"><input id="mask" type="checkbox" checked /> Mask</label>
+    </div>
+    <div class="group" id="quick"></div>
+    <div class="group">
+      <button id="ask" class="primary" title="Open the composer with this selection (Enter)">Ask… <span>⏎</span></button>
+      <button id="cancel" title="Cancel (Esc)">Esc</button>
+    </div>
+  </div>
+  <div id="hint">Drag to select · Shift = square/circle · drag inside a selection to move it, corner to resize · Alt+drag = new region on top · Enter to ask · Esc to cancel</div>
+
+  <script src="actions.js"></script>
+  <script src="overlay.js"></script>
+</body>
+</html>

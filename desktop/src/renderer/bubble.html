@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self';" />
+  <title>Ask AI</title>
+  <link rel="stylesheet" href="bubble.css" />
+</head>
+<body>
+  <div id="bar" role="toolbar" aria-label="Ask AI about the selected text">
+    <button id="ask" class="primary" title="Open the composer with this text">✦ Ask AI</button>
+    <span class="sep"></span>
+    <button data-action="explain">Explain</button>
+    <button data-action="translate">Translate</button>
+    <button data-action="define">Define</button>
+    <button id="close" class="icon" title="Dismiss (Esc)">✕</button>
+  </div>
+  <script src="bubble.js"></script>
+</body>
+</html>

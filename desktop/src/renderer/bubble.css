@@ -1,0 +1,65 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  font: 13px/1 "Segoe UI", system-ui, sans-serif;
+  user-select: none;
+}
+
+#bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 4px;
+  padding: 4px;
+  border: 1px solid #374151;
+  border-radius: 10px;
+  background: #111827;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  color: #e5e7eb;
+  animation: pop 0.12s ease-out;
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #273244;
+}
+
+button.primary {
+  background: #4f46e5;
+  font-weight: 600;
+}
+
+button.primary:hover {
+  background: #6366f1;
+}
+
+button.icon {
+  padding: 6px 8px;
+  color: #9ca3af;
+}
+
+.sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: #374151;
+}
