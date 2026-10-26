@@ -1,7 +1,7 @@
 const zlib = require('node:zlib');
 const { nativeImage } = require('electron');
 
-// Draws the tray icon in code (indigo disc with a white pointer dot) so the
+// Draws the tray icon in code (blue disc with a white pointer dot) so the
 // repo needs no binary assets.
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
@@ -34,7 +34,7 @@ function makeIcon(size = 32) {
       const d = Math.hypot(x - c, y - c);
       const dot = Math.hypot(x - c * 1.25, y - c * 0.75);
       if (dot < size * 0.14) row.push(255, 255, 255, 255);
-      else if (d < size * 0.47) row.push(79, 70, 229, 255);
+      else if (d < size * 0.47) row.push(11, 99, 206, 255);
       else row.push(0, 0, 0, 0);
     }
     rows.push(Buffer.from(row));

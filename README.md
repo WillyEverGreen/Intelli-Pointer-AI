@@ -66,7 +66,7 @@ flowchart LR
 | Provider abstraction: Gemini + any OpenAI-compatible endpoint, with per-model vision checks | ✅ |
 | Latency: capture, OCR, upload size, first token and total time shown per answer and logged to CSV | ✅ |
 | Local-only mode (nothing is uploaded), privacy notice before every send | ✅ |
-| **Select text in any app → "✦ Ask AI · Explain · Translate · Define" bar** appears next to it (like a "Reply" popup) | ✅ Windows UI Automation; it never takes focus and hides on the next click elsewhere |
+| **Select text in any app → "Ask · Explain · Translate · Define" bar** appears next to it (like a "Reply" popup) | ✅ Windows UI Automation; it never takes focus and hides on the next click elsewhere |
 | **Ctrl+Shift+X with text selected** asks about that text (UI Automation → Ctrl+C with the clipboard restored → existing clipboard) | ✅ Ctrl+C is never sent to terminals |
 | Per-region text notes, Windows built-in OCR engine, packaged installer signing | 🕒 Planned |
 
@@ -186,7 +186,7 @@ Each answer shows `capture · OCR · upload size · first token · total`. Every
 cd backend && npm test                        # validation + auth enforcement (13 tests)
 cd desktop && npm test                        # SSE parser
 cd desktop && npx electron test/overlay.e2e.js   # overlay: drawing, move, undo, blur, crops at 1.5x DPI
-cd desktop && npx electron test/bubble.e2e.js    # Ask-AI bar + selected text reaching the panel
+cd desktop && npx electron test/bubble.e2e.js    # Ask bar + selected text reaching the panel
 # with a backend running on :8080:
 cd desktop && npx electron test/panel.e2e.js path\to\image.png   # real OCR + real streamed answer + follow-up
 ```
@@ -196,6 +196,6 @@ cd desktop && npx electron test/panel.e2e.js path\to\image.png   # real OCR + re
 - Gemini time to first token varies a lot with provider load: we measured 15–20 s during a high-demand period, and Gemini returned HTTP 503 on the larger model, which the app shows as a retryable error. The lighter model is usually faster.
 - tesseract.js downloads its English model (about 10 MB) on first use, then works offline. It reads clean screen text well. It struggles with handwriting and math, so those rely on the vision model.
 - Region selection works on one monitor at a time per capture. Use **+ Region** to add regions from another monitor.
-- The Ask-AI bar relies on apps exposing their selection through Windows UI Automation. Edge, Chrome, Word, Notepad and most standard apps do. For apps that don't, select the text and press **Ctrl+Shift+X**, which falls back to a Ctrl+C round-trip.
+- The Ask bar relies on apps exposing their selection through Windows UI Automation. Edge, Chrome, Word, Notepad and most standard apps do. For apps that don't, select the text and press **Ctrl+Shift+X**, which falls back to a Ctrl+C round-trip.
 - The selection helper is a small PowerShell + C# process (`desktop/src/main/native/selection-helper.ps1`) started with `-ExecutionPolicy Bypass` for that one process only. Some antivirus tools may flag a global mouse hook. Turn the bar off in Settings if that's a problem; the hotkey still works.
 - The free Render tier sleeps when idle (see the Render section above).

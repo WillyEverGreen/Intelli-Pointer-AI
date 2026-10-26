@@ -24,11 +24,27 @@
 
   // ---------- helpers ----------
 
-  function banner(html) {
+  // Shows a one-line notice above the conversation, optionally with one action button.
+  function banner(message, action = null) {
     const b = $('banner');
-    b.hidden = !html;
-    b.innerHTML = html || '';
+    b.hidden = !message;
+    b.textContent = message || '';
+    if (message && action) {
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.textContent = action.label;
+      btn.addEventListener('click', action.onClick);
+      b.appendChild(btn);
+    }
   }
+
+  function setIcon(el, name) {
+    el.querySelector(':scope > svg.icon')?.remove();
+    el.insertAdjacentHTML('afterbegin', window.ipIcon(name));
+  }
+
+  const webSearchOn = () => $('web-search').getAttribute('aria-pressed') === 'true';
+  const modelName = (m) => m.label.split(' · ').pop();
 
   const selectedModel = () => models.find((m) => m.id === $('model').value) || null;
 
@@ -53,17 +69,17 @@
       for (const m of models) {
         const o = document.createElement('option');
         o.value = m.id;
-        o.textContent = `${m.label}${m.vision ? '' : ' (text only)'}`;
+        o.textContent = `${modelName(m)}${m.vision ? '' : ' (text only)'}`;
+        o.title = m.label;
         sel.appendChild(o);
       }
       if (models.some((m) => m.id === keep)) sel.value = keep;
-      if (!models.length) banner('The backend has no AI models configured.');
+      if (!models.length) banner('The backend has no models configured.');
       else banner('');
     } catch (err) {
       models = [];
-      $('model').innerHTML = '<option value="">(not connected)</option>';
-      banner(`${escapeHtml(err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))} <button id="banner-settings">Open settings</button>`);
-      $('banner-settings')?.addEventListener('click', openSettings);
+      $('model').innerHTML = '<option value="">Not connected</option>';
+      banner(cleanErr(err), { label: 'Settings', onClick: openSettings });
     }
     updatePrivacy();
   }
@@ -87,14 +103,14 @@
     const thumbs = $('thumbs');
     thumbs.innerHTML = '';
     for (const img of context.images) {
-      const d = document.createElement('div');
+      const d = document.createElement('figure');
       d.className = 'thumb';
-      d.title = `${img.label} · ${img.width}×${img.height}px · ${(img.bytes / 1024).toFixed(0)} KB`;
+      d.title = `${img.label} · ${img.width} × ${img.height} px · ${(img.bytes / 1024).toFixed(0)} KB`;
       const i = document.createElement('img');
       i.src = img.dataUrl;
       i.alt = img.label;
-      const s = document.createElement('span');
-      s.textContent = img.label.replace('Region ', '#');
+      const s = document.createElement('figcaption');
+      s.textContent = `${img.label} · ${img.width} × ${img.height}`;
       d.append(i, s);
       thumbs.appendChild(d);
     }
@@ -106,32 +122,41 @@
     }
     const o = context.ocr;
     const st = $('ocr-status');
-    if (!context.images.length) st.textContent = context.kind === 'selection' ? 'Selected text attached' : 'Copied text attached';
-    else if (o.status === 'pending') st.textContent = 'OCR: reading text…';
+    if (!context.images.length) st.textContent = context.kind === 'selection' ? 'Selected text attached' : 'Clipboard text attached';
+    else if (o.status === 'pending') st.textContent = 'Recognising text…';
     else if (o.status === 'error') st.textContent = o.error;
-    else if (o.status === 'off') st.textContent = 'OCR off';
-    else st.textContent = o.text ? `OCR: ${o.text.split(/\s+/).length} words · ${o.confidence}% confidence · ${fmtMs(o.ms)}` : 'OCR: no text found (image will be used)';
+    else if (o.status === 'off') st.textContent = 'OCR is off';
+    else st.textContent = o.text ? `${o.text.split(/\s+/).length} words recognised · ${o.confidence}%` : 'No text recognised';
     st.title = o.text || '';
     $('send-ocr').disabled = !o.text;
-    $('send-image').disabled = !context.images.length;
+    $('send-image').closest('label').hidden = !context.images.length;
+    $('send-ocr').closest('label').hidden = !context.images.length;
     updatePrivacy();
   }
 
   function updatePrivacy() {
     const p = $('privacy');
     const m = selectedModel();
+    const show = (icon, text, title = text) => {
+      p.innerHTML = window.ipIcon(icon, 13);
+      const s = document.createElement('span');
+      s.textContent = text;
+      p.appendChild(s);
+      p.title = title;
+    };
     if (settings.localOnly) {
-      p.textContent = '🔒 Local-only mode: nothing will be sent. Turn it off in Settings to ask the AI.';
+      show('lock', 'Local-only mode', 'Local-only mode is on: nothing is sent. Turn it off in Settings to ask the model.');
       return;
     }
     const parts = [];
     if (context?.images.length && $('send-image').checked && m?.vision) parts.push(`${context.images.length} image${context.images.length > 1 ? 's' : ''}`);
     if (context?.ocr.text && $('send-ocr').checked) parts.push('OCR text');
-    if (context?.clipText) parts.push(context.kind === 'selection' ? 'selected text' : 'copied text');
-    parts.push('your question');
-    let note = `☁ Sends ${parts.join(' + ')} to ${m ? m.label.split(' · ')[0] : 'the AI provider'} via your backend.`;
+    if (context?.clipText) parts.push(context.kind === 'selection' ? 'selected text' : 'clipboard text');
+    const provider = m ? m.label.split(' · ')[0] : 'the model provider';
+    const what = parts.length ? `${parts.join(', ')} and your question` : 'your question';
+    let note = `Sends ${what} to ${provider} through your backend.`;
     if (context?.images.length && m && !m.vision) note += ' This model is text-only, so images are not sent.';
-    p.textContent = note;
+    show('cloud', parts.length ? `Sends ${parts.join(', ')}` : `Sends to ${provider}`, note);
   }
 
   window.ip.onContext((d) => {
@@ -222,11 +247,11 @@
     $('btn-send').disabled = busy;
   }
 
-  async function send(question, { cacheable = false, webSearch = $('web-search').checked } = {}) {
+  async function send(question, { cacheable = false, webSearch = webSearchOn() } = {}) {
     question = question.trim();
     if (!question) return;
     if (settings.localOnly) {
-      banner('Local-only mode is on, so nothing is sent. Turn it off in Settings to ask the AI.');
+      banner('Local-only mode is on, so nothing is sent.', { label: 'Settings', onClick: openSettings });
       return;
     }
     const model = selectedModel();
@@ -246,11 +271,11 @@
 
     // If no image is going out, the OCR text is the only context: wait for it.
     if (context?.images.length && !useImages && context.ocr.status === 'pending') {
-      bubble.innerHTML = '<span class="status">Reading text from the selection (OCR)…</span>';
+      bubble.innerHTML = '<span class="status">Recognising text…</span>';
       await context.ocrReady;
       useOcr = Boolean(context.ocr.text);
       if (!useOcr) {
-        bubble.innerHTML = '<div class="error">No readable text was found and no image is being sent. Tick "Send image" or pick a vision model.</div>';
+        bubble.innerHTML = '<div class="error">No text was recognised and the image is not being sent. Turn on Image, or choose a model that accepts images.</div>';
         turns.pop();
         return;
       }
@@ -260,7 +285,7 @@
     const body = { model: m.id, messages: buildMessages(useImages, useOcr), webSearch: webSearch && m.webSearch };
     current = { reqId, wrap, bubble, text: '', question, sources: [], opts: { cacheable, webSearch } };
     bubble.classList.add('streaming');
-    bubble.innerHTML = `<span class="status">${useImages ? 'Uploading selection & waiting for the model…' : 'Waiting for the model…'}</span>`;
+    bubble.innerHTML = `<span class="status">${useImages ? 'Uploading and waiting for a response…' : 'Waiting for a response…'}</span>`;
     setBusy(true);
     try {
       await window.ip.ask({
@@ -289,19 +314,29 @@
   function addTools(wrap, { text, timing, retryable, question, opts }) {
     const tools = document.createElement('div');
     tools.className = 'tools';
+    const iconButton = (icon, title) => {
+      const b = document.createElement('button');
+      b.className = 'icon-btn';
+      b.title = title;
+      b.setAttribute('aria-label', title);
+      setIcon(b, icon);
+      tools.appendChild(b);
+      return b;
+    };
     if (text) {
-      const copy = document.createElement('button');
-      copy.textContent = 'Copy';
+      const copy = iconButton('copy', 'Copy');
       copy.addEventListener('click', async () => {
         await window.ip.copy(text);
-        copy.textContent = 'Copied ✓';
-        setTimeout(() => { copy.textContent = 'Copy'; }, 1200);
+        setIcon(copy, 'check');
+        copy.title = 'Copied';
+        setTimeout(() => {
+          setIcon(copy, 'copy');
+          copy.title = 'Copy';
+        }, 1200);
       });
-      tools.appendChild(copy);
     }
     if (retryable !== false) {
-      const retry = document.createElement('button');
-      retry.textContent = 'Retry';
+      const retry = iconButton('rotate-ccw', 'Retry');
       retry.addEventListener('click', () => {
         // Rewind the conversation to just before this question, then ask again.
         const msgs = [...$('conversation').querySelectorAll('.msg')];
@@ -313,7 +348,6 @@
         if (cut !== -1) turns = turns.slice(0, cut);
         send(question, opts);
       });
-      tools.appendChild(retry);
     }
     if (timing) {
       const t = document.createElement('span');
@@ -400,7 +434,7 @@
       $('send-image').checked = false;
       updatePrivacy();
     }
-    send(a.prompt, { cacheable: Boolean(a.cacheable), webSearch: Boolean(a.webSearch) || $('web-search').checked });
+    send(a.prompt, { cacheable: Boolean(a.cacheable), webSearch: Boolean(a.webSearch) || webSearchOn() });
   }
 
   // ---------- collapse / expand ----------
@@ -408,15 +442,17 @@
   function expand() {
     if (!document.body.classList.contains('collapsed')) return;
     document.body.classList.remove('collapsed');
-    $('btn-collapse').textContent = '▾';
+    setIcon($('btn-collapse'), 'chevron-up');
+    $('btn-collapse').title = 'Collapse';
     if (expandedHeight) window.ip.resize(expandedHeight);
   }
 
   function collapse() {
     expandedHeight = window.innerHeight;
     document.body.classList.add('collapsed');
-    $('btn-collapse').textContent = '▸';
-    window.ip.resize(document.getElementById('titlebar').offsetHeight + $('composer').offsetHeight + 4);
+    setIcon($('btn-collapse'), 'chevron-down');
+    $('btn-collapse').title = 'Expand';
+    window.ip.resize($('titlebar').offsetHeight + $('composer-area').offsetHeight + 2);
   }
 
   // ---------- settings ----------
@@ -428,11 +464,11 @@
     $('auth-out').hidden = s.signedIn;
     $('auth-in').hidden = !s.signedIn;
     $('who').textContent = s.email || '';
-    $('auth-msg').textContent = s.secureStorage ? '' : 'Warning: OS secure storage unavailable; you will need to sign in again after restarting.';
+    $('auth-msg').textContent = s.secureStorage ? '' : 'Windows secure storage is unavailable, so you will need to sign in again after restarting.';
     if (s.signedIn) {
       try {
         const u = await window.ip.usage();
-        $('usage').textContent = `Today: ${u.used} / ${u.limit} requests${u.outputTokens ? ` · ${u.outputTokens} output tokens` : ''}`;
+        $('usage').textContent = `${u.used} of ${u.limit} requests used today${u.outputTokens ? ` · ${u.outputTokens.toLocaleString()} output tokens` : ''}`;
       } catch (err) {
         $('usage').textContent = cleanErr(err);
       }
@@ -448,6 +484,7 @@
     }
     $('chat-view').hidden = true;
     $('settings-view').hidden = false;
+    $('btn-settings').setAttribute('aria-pressed', 'true');
     $('settings-msg').textContent = '';
     expand();
     refreshAuth();
@@ -456,6 +493,7 @@
   function closeSettings() {
     $('settings-view').hidden = true;
     $('chat-view').hidden = false;
+    $('btn-settings').setAttribute('aria-pressed', 'false');
   }
 
   async function saveSettings() {
@@ -468,7 +506,7 @@
       const res = await window.ip.updateSettings(patch);
       settings = res.settings;
       applySettings();
-      $('settings-msg').textContent = res.hotkeyErrors.length ? `Saved, but these hotkeys are taken: ${res.hotkeyErrors.join(', ')}` : 'Saved ✓';
+      $('settings-msg').textContent = res.hotkeyErrors.length ? `Saved, but these hotkeys are taken: ${res.hotkeyErrors.join(', ')}` : 'Saved';
       loadModels();
     } catch (err) {
       $('settings-msg').textContent = cleanErr(err);
@@ -501,8 +539,10 @@
 
   // ---------- wiring ----------
 
+  window.ipApplyIcons();
   for (const a of ACTIONS) {
     const b = document.createElement('button');
+    b.className = 'btn';
     b.textContent = a.label;
     b.title = a.prompt;
     b.addEventListener('click', () => runAction(a.id));
@@ -537,6 +577,14 @@
   $('btn-add-region').addEventListener('click', () => window.ip.capture('append'));
   $('btn-replace').addEventListener('click', () => window.ip.capture('replace'));
   $('btn-new').addEventListener('click', () => newConversation(true));
+  $('btn-newchat').addEventListener('click', () => {
+    newConversation(true);
+    closeSettings();
+    $('input').focus();
+  });
+  $('web-search').addEventListener('click', () => {
+    $('web-search').setAttribute('aria-pressed', String(!webSearchOn()));
+  });
   $('send-image').addEventListener('change', updatePrivacy);
   $('send-ocr').addEventListener('change', updatePrivacy);
   $('model').addEventListener('change', () => {
@@ -544,9 +592,11 @@
     window.ip.updateSettings({ defaultModel: $('model').value }).catch(() => {});
   });
   $('btn-pin').addEventListener('click', async () => {
-    const pinned = await window.ip.pin(!$('btn-pin').classList.contains('active'));
-    $('btn-pin').classList.toggle('active', pinned);
-    $('btn-pin').title = pinned ? 'Keep on top (pinned)' : 'Not on top (unpinned)';
+    const btn = $('btn-pin');
+    const pinned = await window.ip.pin(btn.getAttribute('aria-pressed') !== 'true');
+    btn.setAttribute('aria-pressed', String(pinned));
+    setIcon(btn, pinned ? 'pin' : 'pin-off');
+    btn.title = pinned ? 'Keep on top' : 'Not kept on top';
   });
   $('btn-collapse').addEventListener('click', () => (document.body.classList.contains('collapsed') ? expand() : collapse()));
   $('btn-settings').addEventListener('click', () => ($('settings-view').hidden ? openSettings() : closeSettings()));

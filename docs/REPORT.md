@@ -191,7 +191,7 @@ IntelliPointer AI cuts "see something → get an AI answer" to one hotkey, one d
 - server-only secrets
 - defence in depth: validation, two rate limiters, quotas, a strict client sandbox
 
-Selecting text in any application also pops up an "Ask AI" bar (read via Windows UI Automation, without stealing focus), so text questions take only a selection and one click.
+Selecting text in any application also pops up an Ask bar (read via Windows UI Automation, without stealing focus), so text questions take only a selection and one click.
 
 Future work:
 - Windows' built-in OCR engine

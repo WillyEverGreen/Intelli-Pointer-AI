@@ -3,106 +3,135 @@
 <head>
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self';" />
-  <title>IntelliPointer AI</title>
-  <link rel="stylesheet" href="../../node_modules/@highlightjs/cdn-assets/styles/github-dark.min.css" />
+  <title>IntelliPointer</title>
+  <link rel="stylesheet" href="../../node_modules/@highlightjs/cdn-assets/styles/github.min.css" media="(prefers-color-scheme: light)" />
+  <link rel="stylesheet" href="../../node_modules/@highlightjs/cdn-assets/styles/github-dark-dimmed.min.css" media="(prefers-color-scheme: dark)" />
+  <link rel="stylesheet" href="theme.css" />
   <link rel="stylesheet" href="panel.css" />
 </head>
 <body>
   <header id="titlebar">
-    <span class="brand">● IntelliPointer</span>
-    <select id="model" title="AI model"></select>
-    <div class="actions">
-      <button id="btn-pin" class="icon active" title="Keep on top (pinned)">📌</button>
-      <button id="btn-collapse" class="icon" title="Collapse / expand">▾</button>
-      <button id="btn-settings" class="icon" title="Settings">⚙</button>
-      <button id="btn-close" class="icon" title="Hide (still running in the tray)">✕</button>
+    <span class="app-name">IntelliPointer</span>
+    <div class="model-picker">
+      <select id="model" class="select" title="Model" aria-label="Model"></select>
+    </div>
+    <div class="window-actions">
+      <button id="btn-newchat" class="icon-btn" data-icon="square-pen" title="New conversation"></button>
+      <button id="btn-pin" class="icon-btn" data-icon="pin" title="Keep on top" aria-pressed="true"></button>
+      <button id="btn-collapse" class="icon-btn" data-icon="chevron-up" title="Collapse"></button>
+      <button id="btn-settings" class="icon-btn" data-icon="settings" title="Settings" aria-pressed="false"></button>
+      <button id="btn-close" class="icon-btn" data-icon="x" title="Hide (keeps running in the tray)"></button>
     </div>
   </header>
 
   <main id="chat-view">
-    <section id="context" hidden>
+    <section id="context" hidden aria-label="Attached context">
       <div id="thumbs"></div>
-      <div id="context-meta">
-        <div id="ocr-status"></div>
-        <label><input type="checkbox" id="send-image" checked /> Send image</label>
-        <label><input type="checkbox" id="send-ocr" checked /> Send OCR text</label>
+      <div class="context-side">
+        <div id="ocr-status" class="meta"></div>
+        <label class="inline-switch"><input type="checkbox" class="switch" id="send-image" checked /> Image</label>
+        <label class="inline-switch"><input type="checkbox" class="switch" id="send-ocr" checked /> OCR text</label>
       </div>
       <div class="context-actions">
-        <button id="btn-add-region" title="Capture another region into this conversation">+ Region</button>
-        <button id="btn-replace" title="Capture a new region and start over">Replace</button>
-        <button id="btn-new" title="Start a fresh conversation (drops the screen context)">New chat</button>
+        <button id="btn-add-region" class="btn ghost" data-icon="plus" title="Capture another region into this conversation">Add region</button>
+        <button id="btn-replace" class="btn ghost" data-icon="refresh-cw" title="Capture a new region and start over">Replace</button>
+        <button id="btn-new" class="btn ghost" data-icon="x" title="Remove the context and start over">Clear</button>
       </div>
     </section>
 
-    <div id="banner" hidden></div>
+    <div id="banner" hidden role="status"></div>
 
     <section id="conversation" aria-live="polite">
       <div id="empty">
-        <p><b>Press <kbd id="hk-capture">Ctrl+Shift+Space</kbd></b> to mark something on screen.</p>
-        <p>Select text in any app and click <b>✦ Ask AI</b>,<br />or press <kbd id="hk-clip">Ctrl+Shift+X</kbd> while text is selected.</p>
-        <p class="muted">You can also just type a question below.</p>
+        <h1>Ask about anything on your screen</h1>
+        <dl class="shortcuts">
+          <dt><kbd id="hk-capture">Ctrl+Shift+Space</kbd></dt>
+          <dd>Select a screen region</dd>
+          <dt><kbd id="hk-clip">Ctrl+Shift+X</kbd></dt>
+          <dd>Ask about selected text</dd>
+        </dl>
+        <p class="meta">Selecting text in another app also shows an Ask bar next to it.</p>
       </div>
     </section>
 
-    <section id="quick-actions"></section>
-
-    <footer id="composer">
-      <div id="privacy" class="muted"></div>
-      <textarea id="input" rows="2" placeholder="Ask about the selection…  (Enter to send, Shift+Enter for a new line)"></textarea>
-      <div class="composer-row">
-        <button id="btn-capture" title="Capture a screen region">⬚ Capture</button>
-        <label title="Ground the answer with Google Search (Gemini models)"><input type="checkbox" id="web-search" /> Web search</label>
-        <span class="spacer"></span>
-        <button id="btn-stop" hidden>■ Stop</button>
-        <button id="btn-send" class="primary">Send ➤</button>
+    <footer id="composer-area">
+      <div id="quick-actions" role="toolbar" aria-label="Quick actions"></div>
+      <div id="composer">
+        <textarea id="input" rows="2" placeholder="Ask a question" aria-label="Question"></textarea>
+        <div class="composer-row">
+          <button id="btn-capture" class="icon-btn" data-icon="scan" title="Select a screen region"></button>
+          <button id="web-search" class="icon-btn" data-icon="globe" title="Search the web for this answer" aria-pressed="false"></button>
+          <span id="privacy" class="meta"></span>
+          <button id="btn-stop" class="send-btn" data-icon="square" title="Stop generating" hidden></button>
+          <button id="btn-send" class="send-btn" data-icon="arrow-up" title="Send (Enter)"></button>
+        </div>
       </div>
     </footer>
   </main>
 
   <main id="settings-view" hidden>
-    <h2>Account</h2>
-    <div id="auth-out">
-      <input id="email" type="email" placeholder="Email" autocomplete="username" />
-      <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
-      <div class="row">
-        <button id="btn-signin" class="primary">Sign in</button>
-        <button id="btn-signup">Create account</button>
+    <section class="settings-section">
+      <h2>Account</h2>
+      <div id="auth-out">
+        <label class="field">Email <input id="email" class="input" type="email" autocomplete="username" /></label>
+        <label class="field">Password <input id="password" class="input" type="password" autocomplete="current-password" /></label>
+        <div class="row">
+          <button id="btn-signin" class="btn primary">Sign in</button>
+          <button id="btn-signup" class="btn">Create account</button>
+        </div>
       </div>
+      <div id="auth-in" hidden>
+        <div class="account-row">
+          <div>
+            <div id="who" class="strong"></div>
+            <div id="usage" class="meta"></div>
+          </div>
+          <button id="btn-signout" class="btn" data-icon="log-out">Sign out</button>
+        </div>
+      </div>
+      <p id="auth-msg" class="meta"></p>
+    </section>
+
+    <section class="settings-section">
+      <h2>Connection</h2>
+      <label class="field">Backend URL <input id="s-backendUrl" class="input" placeholder="https://your-api.onrender.com" /></label>
+      <label class="field">Firebase Web API key <input id="s-firebaseApiKey" class="input" placeholder="AIza…" />
+        <span class="help">Public project identifier from Firebase project settings. Not a secret.</span></label>
+    </section>
+
+    <section class="settings-section">
+      <h2>Behaviour</h2>
+      <label class="field">Default action <select id="s-defaultAction" class="select"></select>
+        <span class="help">Runs when you press Enter with an empty question.</span></label>
+      <label class="toggle-row"><span><span class="strong">Ask bar on text selection</span><span class="help">Reads the selection on this PC. Nothing is sent until you click.</span></span><input type="checkbox" class="switch" id="s-selectionBubble" /></label>
+      <label class="toggle-row"><span><span class="strong">Local OCR</span><span class="help">Extract text from captures on this PC.</span></span><input type="checkbox" class="switch" id="s-ocrEnabled" /></label>
+      <label class="toggle-row"><span><span class="strong">Local-only mode</span><span class="help">Never send screen content to the cloud.</span></span><input type="checkbox" class="switch" id="s-localOnly" /></label>
+      <label class="field">Conversation turns kept <input id="s-maxTurns" class="input narrow" type="number" min="1" max="50" /></label>
+    </section>
+
+    <section class="settings-section">
+      <h2>Shortcuts</h2>
+      <label class="field">Select a screen region <input id="s-captureHotkey" class="input" /></label>
+      <label class="field">Ask about selected text <input id="s-clipboardHotkey" class="input" /></label>
+    </section>
+
+    <section class="settings-section">
+      <h2>Privacy and diagnostics</h2>
+      <p class="help">Screenshots and conversations stay in memory only. They are never written to disk or stored in the cloud, and are erased when you clear the conversation or quit.</p>
+      <button id="btn-latency" class="btn" data-icon="external-link">Open latency log</button>
+    </section>
+
+    <div class="settings-footer">
+      <span id="settings-msg" class="meta"></span>
+      <button id="btn-back" class="btn">Cancel</button>
+      <button id="btn-save" class="btn primary">Save</button>
     </div>
-    <div id="auth-in" hidden>
-      <p>Signed in as <b id="who"></b></p>
-      <p id="usage" class="muted"></p>
-      <button id="btn-signout">Sign out</button>
-    </div>
-    <p id="auth-msg" class="muted"></p>
-
-    <h2>Connection</h2>
-    <label>Backend URL <input id="s-backendUrl" placeholder="https://your-api.onrender.com" /></label>
-    <label>Firebase Web API key <input id="s-firebaseApiKey" placeholder="AIza… (public web key, not a secret)" /></label>
-
-    <h2>Behaviour</h2>
-    <label>Default quick action <select id="s-defaultAction"></select></label>
-    <label class="check"><input type="checkbox" id="s-localOnly" /> Local-only mode (never send screen content to the cloud; OCR still works)</label>
-    <label class="check"><input type="checkbox" id="s-ocrEnabled" /> Run local OCR on captures</label>
-    <label class="check"><input type="checkbox" id="s-selectionBubble" /> Show the "Ask AI" bar when I select text in other apps (read locally; nothing is sent until you click)</label>
-    <label>Max conversation turns kept <input id="s-maxTurns" type="number" min="1" max="50" /></label>
-    <label>Capture hotkey <input id="s-captureHotkey" /></label>
-    <label>Ask-about-selected-text hotkey <input id="s-clipboardHotkey" /></label>
-
-    <div class="row">
-      <button id="btn-save" class="primary">Save</button>
-      <button id="btn-back">Back</button>
-    </div>
-    <p id="settings-msg" class="muted"></p>
-
-    <h2>Privacy &amp; diagnostics</h2>
-    <p class="muted">Screenshots and conversations are kept in memory only and are never written to disk or stored in the cloud. "New chat" or quitting the app erases them.</p>
-    <button id="btn-latency">Open latency log (CSV)</button>
   </main>
 
   <script src="../../node_modules/marked/lib/marked.umd.js"></script>
   <script src="../../node_modules/dompurify/dist/purify.min.js"></script>
   <script src="../../node_modules/@highlightjs/cdn-assets/highlight.min.js"></script>
+  <script src="icons.js"></script>
   <script src="actions.js"></script>
   <script src="panel.js"></script>
 </body>

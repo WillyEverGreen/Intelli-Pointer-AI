@@ -6,7 +6,7 @@
   const view = document.getElementById('view');
   const vctx = view.getContext('2d');
   const toolbar = document.getElementById('toolbar');
-  const maskBox = document.getElementById('mask');
+  const maskBtn = document.getElementById('mask');
   const widthInput = document.getElementById('width');
 
   const SELECTION_TOOLS = new Set(['rect', 'square', 'ellipse', 'lasso']);
@@ -18,18 +18,21 @@
   let undoStack = [];
   let redoStack = [];
   let tool = 'rect';
-  let color = '#ef4444';
+  let color = '#e5484d';
+  const ACCENT = '#2f7bf5';
   let drag = null; // in-progress interaction
   let dirty = true;
   let active = false;
 
   // ---------- setup ----------
 
+  window.ipApplyIcons();
   for (const b of document.querySelectorAll('.swatch')) b.style.setProperty('--c', b.dataset.color);
 
   const quick = document.getElementById('quick');
-  for (const a of window.IP_ACTIONS.slice(0, 5)) {
+  for (const a of window.IP_ACTIONS.filter((x) => ['explain', 'summarize', 'fix'].includes(x.id))) {
     const b = document.createElement('button');
+    b.className = 'btn';
     b.textContent = a.label;
     b.title = `Send immediately: "${a.prompt}"`;
     b.addEventListener('click', () => confirm(a.id));
@@ -57,7 +60,12 @@
   document.getElementById('clear').addEventListener('click', () => mutate(() => { ops = []; }));
   document.getElementById('ask').addEventListener('click', () => confirm(null));
   document.getElementById('cancel').addEventListener('click', () => window.overlay.cancel());
-  maskBox.addEventListener('change', () => { dirty = true; });
+  const maskOn = () => maskBtn.getAttribute('aria-pressed') === 'true';
+  function toggleMask() {
+    maskBtn.setAttribute('aria-pressed', String(!maskOn()));
+    dirty = true;
+  }
+  maskBtn.addEventListener('click', toggleMask);
 
   // ---------- history ----------
 
@@ -240,7 +248,7 @@
       const b = bboxOf(op);
       vctx.save();
       vctx.lineWidth = 2;
-      vctx.strokeStyle = '#818cf8';
+      vctx.strokeStyle = ACCENT;
       vctx.setLineDash(op === drag?.preview ? [6, 4] : []);
       shapePath(vctx, op, dpr);
       vctx.stroke();
@@ -248,7 +256,7 @@
       // number badge, offset from the corner so the resize handle doesn't cover it
       const bx = Math.max(12, b.x - 14) * dpr;
       const by = Math.max(12, b.y - 14) * dpr;
-      vctx.fillStyle = '#4f46e5';
+      vctx.fillStyle = ACCENT;
       vctx.beginPath();
       vctx.arc(bx, by, 11 * dpr, 0, Math.PI * 2);
       vctx.fill();
@@ -262,9 +270,9 @@
       vctx.font = `${11 * dpr}px "Segoe UI", Arial, sans-serif`;
       const tw = vctx.measureText(label).width + 10 * dpr;
       const ly = (b.y + b.h) * dpr + 6 * dpr;
-      vctx.fillStyle = 'rgba(17,24,39,0.9)';
+      vctx.fillStyle = 'rgba(29,30,33,0.92)';
       vctx.fillRect(b.x * dpr, ly, tw, 18 * dpr);
-      vctx.fillStyle = '#e5e7eb';
+      vctx.fillStyle = '#f2f3f5';
       vctx.textAlign = 'left';
       vctx.fillText(label, b.x * dpr + 5 * dpr, ly + 9 * dpr);
       if (op.shape !== 'lasso' && op !== drag?.preview) {
@@ -393,8 +401,7 @@
       const regs = regions();
       if (regs.length) mutate(() => { ops = ops.filter((o) => o !== regs[regs.length - 1]); });
     } else if (key === 'm' && !e.ctrlKey) {
-      maskBox.checked = !maskBox.checked;
-      dirty = true;
+      toggleMask();
     } else if (KEYS[key] && !e.ctrlKey && !e.altKey) {
       setTool(KEYS[key]);
     }
@@ -419,7 +426,7 @@
     const ctx = c.getContext('2d');
     ctx.drawImage(base, px, py, pw, ph, 0, 0, pw, ph);
     drawBlurs(ctx, k, px / k, py / k);
-    if (maskBox.checked && op.shape && op.shape !== 'rect') {
+    if (maskOn() && op.shape && op.shape !== 'rect') {
       const p = new Path2D();
       p.rect(0, 0, pw, ph);
       const inner = new Path2D();

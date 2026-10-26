@@ -7,7 +7,7 @@
 // Run: npx electron test/panel.e2e.js <image.png> [outDir]
 const path = require('node:path');
 const fs = require('node:fs');
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeTheme } = require('electron');
 
 const imagePath = process.argv[2];
 const outDir = process.argv[3] || path.join(__dirname, '..', '.test-output');
@@ -16,6 +16,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 app.setPath('userData', path.join(outDir, 'userData')); // isolated settings/latency log
 
 app.whenReady().then(async () => {
+  if (process.env.IP_THEME) nativeTheme.themeSource = process.env.IP_THEME; // light | dark
   const settings = require('../src/main/settings');
   const auth = require('../src/main/auth');
   const api = require('../src/main/api');
@@ -119,7 +120,7 @@ app.whenReady().then(async () => {
   }
 
   console.log('  body class:', await win.webContents.executeJavaScript(`document.body.className + ' | collapse btn: ' + document.getElementById('btn-collapse').textContent + ' | msgs: ' + document.querySelectorAll('.msg').length + ' | conv display: ' + getComputedStyle(document.getElementById('conversation')).display + ' h=' + document.getElementById('conversation').offsetHeight`));
-  fs.writeFileSync(path.join(outDir, 'panel.png'), (await win.webContents.capturePage()).toPNG());
+  fs.writeFileSync(path.join(outDir, `panel${process.env.IP_THEME ? '-' + process.env.IP_THEME : ''}.png`), (await win.webContents.capturePage()).toPNG());
   check(errors.length === 0, `no renderer console errors ${errors.join(' | ')}`);
   await ocr.shutdown();
   console.log(failures.length ? `\n${failures.length} FAILED` : '\nALL PASSED');

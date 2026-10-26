@@ -1,6 +1,7 @@
 // Small "Ask AI" bar shown next to text the user just selected in another app.
 // It never takes keyboard focus; clicks are handled by the main process.
 (() => {
+  window.ipApplyIcons();
   const bar = document.getElementById('bar');
   document.getElementById('ask').addEventListener('click', () => window.bubble.act(null));
   document.getElementById('close').addEventListener('click', () => window.bubble.close());

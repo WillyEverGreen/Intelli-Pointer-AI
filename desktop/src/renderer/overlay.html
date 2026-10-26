@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;" />
   <title>IntelliPointer selection</title>
+  <link rel="stylesheet" href="theme.css" />
   <link rel="stylesheet" href="overlay.css" />
 </head>
 <body>
@@ -11,36 +12,39 @@
 
   <div id="toolbar" role="toolbar" aria-label="Selection tools">
     <div class="group" id="tools">
-      <button data-tool="rect" title="Rectangle (R) — hold Shift for a square">▭<span>R</span></button>
-      <button data-tool="square" title="Square (S)">□<span>S</span></button>
-      <button data-tool="ellipse" title="Circle / ellipse (E) — hold Shift for a circle">◯<span>E</span></button>
-      <button data-tool="lasso" title="Freehand lasso (L)">➰<span>L</span></button>
-      <button data-tool="pen" title="Annotation pen (P)">✎<span>P</span></button>
-      <button data-tool="arrow" title="Arrow (A)">➚<span>A</span></button>
-      <button data-tool="highlight" title="Highlighter (H)">▮<span>H</span></button>
-      <button data-tool="blur" title="Blur sensitive area (B) — pixelates before anything is sent">▒<span>B</span></button>
+      <button class="icon-btn" data-tool="rect" data-icon="square-dashed" title="Rectangle (R). Hold Shift for a square."></button>
+      <button class="icon-btn" data-tool="square" data-icon="square" title="Square (S)"></button>
+      <button class="icon-btn" data-tool="ellipse" data-icon="circle-dashed" title="Ellipse (E). Hold Shift for a circle."></button>
+      <button class="icon-btn" data-tool="lasso" data-icon="lasso" title="Freehand (L)"></button>
     </div>
     <div class="group">
-      <input id="width" type="range" min="2" max="16" value="4" title="Pen thickness" />
-      <button class="swatch" data-color="#ef4444" title="Red"></button>
-      <button class="swatch" data-color="#22c55e" title="Green"></button>
-      <button class="swatch" data-color="#3b82f6" title="Blue"></button>
-      <button class="swatch" data-color="#facc15" title="Yellow"></button>
+      <button class="icon-btn" data-tool="pen" data-icon="pen-line" title="Pen (P)"></button>
+      <button class="icon-btn" data-tool="arrow" data-icon="arrow-up-right" title="Arrow (A)"></button>
+      <button class="icon-btn" data-tool="highlight" data-icon="highlighter" title="Highlighter (H)"></button>
+      <button class="icon-btn" data-tool="blur" data-icon="eye-off" title="Redact (B). Pixelates the area before anything is sent."></button>
     </div>
     <div class="group">
-      <button id="undo" title="Undo (Ctrl+Z)">↶</button>
-      <button id="redo" title="Redo (Ctrl+Y)">↷</button>
-      <button id="clear" title="Clear everything">✕ Clear</button>
-      <label class="toggle" title="White-out everything outside circles / lassos (M)"><input id="mask" type="checkbox" checked /> Mask</label>
+      <button class="swatch" data-color="#e5484d" title="Red"></button>
+      <button class="swatch" data-color="#30a46c" title="Green"></button>
+      <button class="swatch" data-color="#0b63ce" title="Blue"></button>
+      <button class="swatch" data-color="#f5a524" title="Amber"></button>
+      <input id="width" type="range" min="2" max="16" value="4" title="Stroke width" aria-label="Stroke width" />
+    </div>
+    <div class="group">
+      <button class="icon-btn" id="undo" data-icon="undo-2" title="Undo (Ctrl+Z)"></button>
+      <button class="icon-btn" id="redo" data-icon="redo-2" title="Redo (Ctrl+Y)"></button>
+      <button class="icon-btn" id="clear" data-icon="trash-2" title="Clear all"></button>
+      <button class="icon-btn" id="mask" data-icon="crop" title="Mask outside ellipse and freehand shapes (M)" aria-pressed="true"></button>
     </div>
     <div class="group" id="quick"></div>
     <div class="group">
-      <button id="ask" class="primary" title="Open the composer with this selection (Enter)">Ask… <span>⏎</span></button>
-      <button id="cancel" title="Cancel (Esc)">Esc</button>
+      <button id="cancel" class="btn ghost" title="Cancel (Esc)">Cancel</button>
+      <button id="ask" class="btn primary" title="Ask about the selection (Enter)">Ask <span class="key" data-icon="corner-down-left" data-icon-size="13"></span></button>
     </div>
   </div>
-  <div id="hint">Drag to select · Shift = square/circle · drag inside a selection to move it, corner to resize · Alt+drag = new region on top · Enter to ask · Esc to cancel</div>
+  <div id="hint">Drag to select. Drag a selection to move it, or a corner to resize. Alt+drag adds an overlapping region.</div>
 
+  <script src="icons.js"></script>
   <script src="actions.js"></script>
   <script src="overlay.js"></script>
 </body>

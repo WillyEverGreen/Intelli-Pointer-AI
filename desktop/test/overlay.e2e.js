@@ -4,7 +4,7 @@
 // Run: npx electron test/overlay.e2e.js [outDir]
 const path = require('node:path');
 const fs = require('node:fs');
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeTheme } = require('electron');
 
 const outDir = process.argv[2] || path.join(__dirname, '..', '.test-output');
 const W = 1000;
@@ -45,6 +45,7 @@ async function key(wc, keyCode, modifiers = []) {
 }
 
 app.whenReady().then(async () => {
+  if (process.env.IP_THEME) nativeTheme.themeSource = process.env.IP_THEME; // light | dark
   fs.mkdirSync(outDir, { recursive: true });
   const failures = [];
   const check = (cond, msg) => {
@@ -104,7 +105,7 @@ app.whenReady().then(async () => {
   await state('move region 1 by +10');
   await wait(100);
   const shot = await win.webContents.capturePage();
-  fs.writeFileSync(path.join(outDir, 'overlay-drawn.png'), shot.toPNG());
+  fs.writeFileSync(path.join(outDir, `overlay-drawn${process.env.IP_THEME ? '-' + process.env.IP_THEME : ''}.png`), shot.toPNG());
 
   const confirmed = new Promise((r) => ipcMain.once('overlay:confirm', (_e, p) => r(p)));
   await key(wc, 'Return');

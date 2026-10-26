@@ -1,6 +1,6 @@
 const path = require('node:path');
 const {
-  app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen, clipboard, nativeImage, shell, Notification,
+  app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen, clipboard, nativeImage, shell, Notification, nativeTheme,
 } = require('electron');
 const settings = require('./settings');
 const auth = require('./auth');
@@ -35,7 +35,7 @@ function createPanel() {
     skipTaskbar: false,
     alwaysOnTop: true,
     title: 'IntelliPointer AI',
-    backgroundColor: '#111827',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1d1e21' : '#ffffff', // matches theme.css, avoids a flash
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'panel.js'),
       contextIsolation: true,

@@ -3,13 +3,14 @@
 // Run: npx electron test/bubble.e2e.js [outDir]
 const path = require('node:path');
 const fs = require('node:fs');
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeTheme } = require('electron');
 
 const outDir = process.argv[2] || path.join(__dirname, '..', '.test-output');
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 app.setPath('userData', path.join(outDir, 'userData-bubble'));
 
 app.whenReady().then(async () => {
+  if (process.env.IP_THEME) nativeTheme.themeSource = process.env.IP_THEME; // light | dark
   fs.mkdirSync(outDir, { recursive: true });
   const failures = [];
   const check = (cond, msg) => {
@@ -43,7 +44,7 @@ app.whenReady().then(async () => {
   const ask = new Promise((r) => ipcMain.once('bubble:action', (_e, a) => r(a)));
   await bubble.webContents.executeJavaScript(`document.getElementById('ask').click()`);
   check((await Promise.race([ask, wait(2000).then(() => 'timeout')])) === null, 'clicking Ask AI sends no action (opens composer)');
-  fs.writeFileSync(path.join(outDir, 'bubble.png'), (await bubble.webContents.capturePage()).toPNG());
+  fs.writeFileSync(path.join(outDir, `bubble${process.env.IP_THEME ? '-' + process.env.IP_THEME : ''}.png`), (await bubble.webContents.capturePage()).toPNG());
 
   // Panel receives selected text (as main.js openWithText sends it).
   const settings = require('../src/main/settings');
@@ -52,7 +53,7 @@ app.whenReady().then(async () => {
   h('auth:status', () => ({ signedIn: false, secureStorage: true }));
   h('models:list', () => [{ id: 'gemini/x', label: 'Google Gemini · x', vision: true, webSearch: true }]);
   for (const ch of ['settings:update', 'usage:get', 'ask:cancel', 'ask:start', 'clipboard:write', 'panel:pin', 'panel:resize', 'panel:hide', 'open:latencyLog', 'capture:start', 'auth:signIn', 'auth:signOut']) h(ch, () => null);
-  const panel = new BrowserWindow({ width: 460, height: 600, show: false, webPreferences: { preload: path.join(__dirname, '..', 'src', 'preload', 'panel.js'), contextIsolation: true, sandbox: true } });
+  const panel = new BrowserWindow({ width: 460, height: 600, frame: false, alwaysOnTop: true, webPreferences: { preload: path.join(__dirname, '..', 'src', 'preload', 'panel.js'), contextIsolation: true, sandbox: true } });
   watch(panel);
   await panel.loadFile(path.join(__dirname, '..', 'src', 'renderer', 'panel.html'));
   await wait(500);
@@ -64,6 +65,17 @@ app.whenReady().then(async () => {
   check(st.clip === 'Report is a draft written against your rubric.', 'selected text shown in the panel');
   const hasSetting = await panel.webContents.executeJavaScript(`!!document.getElementById('s-selectionBubble')`);
   check(hasSetting, 'settings has the Ask-AI-bar toggle');
+
+  // Screenshots of each panel state for visual review.
+  const suffix = process.env.IP_THEME ? `-${process.env.IP_THEME}` : '';
+  const snap = async (name) => fs.writeFileSync(path.join(outDir, `${name}${suffix}.png`), (await panel.webContents.capturePage()).toPNG());
+  await snap('panel-selection');
+  await panel.webContents.executeJavaScript(`document.getElementById('btn-newchat').click()`);
+  await wait(200);
+  await snap('panel-empty');
+  await panel.webContents.executeJavaScript(`document.getElementById('btn-settings').click()`);
+  await wait(400);
+  await snap('panel-settings');
 
   check(errors.length === 0, `no renderer console errors ${errors.join(' | ')}`);
   console.log(failures.length ? `\n${failures.length} FAILED` : '\nALL PASSED');
