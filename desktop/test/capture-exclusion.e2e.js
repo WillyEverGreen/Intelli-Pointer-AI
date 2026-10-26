@@ -24,7 +24,7 @@ app.whenReady().then(async () => {
   await wait(600);
   protectedWin.showInactive();
   normalWin.showInactive();
-  await wait(600);
+  await wait(1200); // let both windows paint before capturing
 
   const size = { width: Math.round(d.bounds.width * d.scaleFactor), height: Math.round(d.bounds.height * d.scaleFactor) };
   const t0 = Date.now();
@@ -41,9 +41,15 @@ app.whenReady().then(async () => {
   };
   const red = pixel(100, 100);
   const green = pixel(260, 100);
+  // A locked or sleeping screen captures as solid black: nothing to test then.
+  if ([red, green].every((p) => p.r === 0 && p.g === 0 && p.b === 0)) {
+    console.log('SKIP the screen is locked or off, so it captures as black');
+    app.exit(0);
+    return;
+  }
   const isRed = red.r > 200 && red.g < 60 && red.b < 60;
   const isGreen = green.g > 200 && green.r < 60 && green.b < 60;
-  console.log(`grab ${grabMs} ms at ${size.width}x${size.height}`);
+  console.log(`grab ${grabMs} ms at ${size.width}x${size.height}; protected-window pixel ${JSON.stringify(red)}, normal-window pixel ${JSON.stringify(green)}`);
   console.log(`${!isRed ? 'PASS' : 'FAIL'} protected window is excluded from the capture`);
   console.log(`${isGreen ? 'PASS' : 'FAIL'} normal window is captured (control)`);
   app.exit(!isRed && isGreen ? 0 : 1);

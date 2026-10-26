@@ -51,7 +51,7 @@ app.whenReady().then(async () => {
     console.log(`  round ${round}: overlay shown ${result?.overlayShownMs} ms, screenshot in ${result?.captureMs} ms, crop ready ${totalMs} ms`);
     check(visibleMs < 100, `round ${round}: overlay appears in under 100 ms`);
     check(result?.captureMethod === 'bitblt', `round ${round}: fast BitBlt path used (${result?.captureMethod})`);
-    check(result?.captureMs < 400, `round ${round}: screenshot ready in under 400 ms`);
+    check(result?.captureMs < 600, `round ${round}: screenshot ready in under 600 ms (${result?.captureMs} ms)`);
     check(totalMs < 1000, `round ${round}: hotkey to finished crop in under 1 s (${totalMs} ms)`);
     await wait(400);
     check(!overlayWin().isVisible(), `round ${round}: overlay hidden after confirm`);

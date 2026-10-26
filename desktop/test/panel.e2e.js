@@ -23,6 +23,7 @@ app.whenReady().then(async () => {
   const ocr = require('../src/main/ocr');
   const latency = require('../src/main/latency');
   await auth.restore();
+  settings.update({ providers: { cloud: { enabled: true } } }); // this test goes through the cloud backend
   fs.mkdirSync(outDir, { recursive: true });
 
   const failures = [];
@@ -56,16 +57,19 @@ app.whenReady().then(async () => {
     latency.record({ timestamp: new Date().toISOString(), model: body.model, uploadBytes: r.timings.uploadBytes, firstTokenMs: r.timings.firstTokenMs, totalMs: r.timings.totalMs, outcome: r.outcome, ocrMs: meta?.ocrMs });
     return { outcome: r.outcome };
   });
-  for (const ch of ['clipboard:write', 'panel:pin', 'panel:resize', 'panel:hide', 'open:latencyLog', 'capture:start', 'auth:signIn', 'auth:signOut']) h(ch, () => true);
+  h('hotkeys:check', () => ({ ok: true }));
+  for (const ch of ['clipboard:write', 'panel:pin', 'panel:resize', 'panel:hide', 'open:latencyLog', 'open:diagnostics', 'capture:start', 'auth:signIn', 'auth:signOut']) h(ch, () => true);
 
-  await win.loadFile(path.join(__dirname, '..', 'src', 'renderer', 'panel.html'));
+  await win.loadFile(path.join(__dirname, '..', 'src', 'renderer', 'panel', 'panel.html'));
   await wait(1500); // models load
   await win.webContents.executeJavaScript(`document.addEventListener('click', (e) => console.log('CLICK', e.target.id || e.target.textContent, 'trusted=' + e.isTrusted, e.clientX, e.clientY), true)`);
-  const models = await win.webContents.executeJavaScript(`[...document.querySelectorAll('#model option')].map(o => o.value)`);
-  check(models.length > 0 && models[0] !== '', `panel loaded models from backend (${models.join(', ')})`);
-  // Prefer the lighter model (less likely to be overloaded).
-  const lite = models.find((m) => m.includes('lite'));
-  if (lite) await win.webContents.executeJavaScript(`document.getElementById('model').value = ${JSON.stringify(lite)}; document.getElementById('model').dispatchEvent(new Event('change'))`);
+  // Open the model menu and read its entries.
+  await win.webContents.executeJavaScript(`document.getElementById('model-button').click()`);
+  await wait(100);
+  const models = await win.webContents.executeJavaScript(`[...document.querySelectorAll('.mm-name')].map((n) => n.textContent)`);
+  check(models.length > 0, `panel loaded models from backend (${models.join(', ')})`);
+  // Prefer the lighter model (less likely to be overloaded): search and press Enter.
+  await win.webContents.executeJavaScript(`(() => { const s = document.querySelector('.mm-search input'); s.value = 'lite'; s.dispatchEvent(new Event('input')); s.dispatchEvent(new KeyboardEvent('keydown', { key: models.some((m) => m.includes('lite')) ? 'Enter' : 'Escape', bubbles: true })); })()`.replace('models.some((m) => m.includes(\'lite\'))', String(models.some((m) => m.includes('lite')))));
 
   // Inject a "captured" region, then run real local OCR on it like main.js does.
   const png = fs.readFileSync(imagePath);

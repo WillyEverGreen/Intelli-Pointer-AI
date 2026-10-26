@@ -29,14 +29,25 @@
   window.ipApplyIcons();
   for (const b of document.querySelectorAll('.swatch')) b.style.setProperty('--c', b.dataset.color);
 
+  // Pinned commands (sent by main on each show) become one-click buttons.
+  // With a preset command (opened from that command's shortcut), the main
+  // button runs it instead of opening the composer.
   const quick = document.getElementById('quick');
-  for (const a of window.IP_ACTIONS.filter((x) => ['explain', 'summarize', 'fix'].includes(x.id))) {
-    const b = document.createElement('button');
-    b.className = 'btn';
-    b.textContent = a.label;
-    b.title = `Send immediately: "${a.prompt}"`;
-    b.addEventListener('click', () => confirm(a.id));
-    quick.appendChild(b);
+  const askBtn = document.getElementById('ask');
+  function renderCommands(commands = [], presetAction = null) {
+    quick.innerHTML = '';
+    quick.hidden = !commands.length;
+    for (const c of commands) {
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.textContent = c.name;
+      b.title = `Run “${c.name}” on the selection`;
+      b.addEventListener('click', () => confirm(c.id));
+      quick.appendChild(b);
+    }
+    const preset = presetAction && commands.find((c) => c.id === presetAction);
+    askBtn.firstChild.textContent = preset ? `${preset.name} ` : 'Ask ';
+    askBtn.title = preset ? `Run “${preset.name}” on the selection (Enter)` : 'Ask about the selection (Enter)';
   }
 
   function setTool(t) {
@@ -506,7 +517,8 @@
   let resolveFrame = () => {};
 
   // Overlay becomes visible: start a fresh session on the live (transparent) screen.
-  window.overlay.onShow(({ scaleFactor }) => {
+  window.overlay.onShow(({ scaleFactor, commands, presetAction }) => {
+    renderCommands(commands, presetAction);
     base = null;
     k = scaleFactor || devicePixelRatio;
     view.width = Math.round(innerWidth * devicePixelRatio);

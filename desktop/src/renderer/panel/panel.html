@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self';" />
+  <title>IntelliPointer</title>
+  <link rel="stylesheet" href="../../../node_modules/@highlightjs/cdn-assets/styles/github.min.css" media="(prefers-color-scheme: light)" />
+  <link rel="stylesheet" href="../../../node_modules/@highlightjs/cdn-assets/styles/github-dark-dimmed.min.css" media="(prefers-color-scheme: dark)" />
+  <link rel="stylesheet" href="../shared/theme.css" />
+  <link rel="stylesheet" href="panel.css" />
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <!-- ===== Title bar ===== -->
+  <header id="titlebar">
+    <span class="brand"><span class="logo" aria-hidden="true"></span><span class="app-name">IntelliPointer</span></span>
+    <div class="model-picker">
+      <button id="model-button" class="model-button" type="button"></button>
+      <div id="model-menu" class="model-menu" hidden></div>
+    </div>
+    <div class="window-actions">
+      <button id="btn-newchat" class="icon-btn" data-icon="square-pen" title="New conversation"></button>
+      <button id="btn-pin" class="icon-btn" data-icon="pin" title="Keep on top" aria-pressed="true"></button>
+      <button id="btn-collapse" class="icon-btn" data-icon="chevron-up" title="Collapse"></button>
+      <button id="btn-settings" class="icon-btn" data-icon="settings" title="Settings" aria-pressed="false"></button>
+      <button id="btn-close" class="icon-btn" data-icon="x" title="Hide (keeps running in the tray)"></button>
+    </div>
+  </header>
+
+  <!-- ===== Chat ===== -->
+  <main id="chat-view">
+    <section id="context" hidden aria-label="Attached context">
+      <div class="context-card">
+        <div class="context-head">
+          <span id="context-kind" class="context-kind"></span>
+          <span id="ocr-status" class="meta"></span>
+          <span class="spacer"></span>
+          <button id="btn-add-region" class="icon-btn small" data-icon="plus" title="Add another screen region"></button>
+          <button id="btn-replace" class="icon-btn small" data-icon="refresh-cw" title="Replace with a new capture"></button>
+          <button id="btn-new" class="icon-btn small" data-icon="x" title="Remove context"></button>
+        </div>
+        <div id="thumbs"></div>
+        <div id="clip" hidden>
+          <div id="clip-text" class="clip-text"></div>
+          <button id="clip-more" class="link-btn" hidden>Show more</button>
+        </div>
+        <div id="context-options" class="context-options">
+          <label class="inline-switch"><input type="checkbox" class="switch" id="send-image" checked /> Send image</label>
+          <label class="inline-switch"><input type="checkbox" class="switch" id="send-ocr" checked /> Send OCR text</label>
+        </div>
+      </div>
+    </section>
+
+    <div id="banner" hidden role="status"></div>
+
+    <section id="conversation" aria-live="polite">
+      <div id="empty">
+        <span class="logo large" aria-hidden="true"></span>
+        <h1>Ask about anything on your screen</h1>
+        <dl class="shortcuts">
+          <dt><span id="hk-capture" class="keys"></span></dt>
+          <dd>Select a screen region</dd>
+          <dt><span id="hk-selection" class="keys"></span></dt>
+          <dd>Ask about selected text</dd>
+        </dl>
+        <p class="meta">Selecting text in any app also shows an Ask bar next to it.</p>
+      </div>
+    </section>
+
+    <footer id="composer-area">
+      <div id="quick-actions" role="toolbar" aria-label="Commands"></div>
+      <div id="composer">
+        <textarea id="input" rows="2" placeholder="Ask a question" aria-label="Question"></textarea>
+        <div class="composer-row">
+          <button id="btn-capture" class="icon-btn" data-icon="scan" title="Select a screen region"></button>
+          <button id="web-search" class="icon-btn" data-icon="globe" title="Search the web for this answer" aria-pressed="false"></button>
+          <span id="privacy" class="meta"></span>
+          <button id="btn-stop" class="send-btn" data-icon="square" title="Stop generating" hidden></button>
+          <button id="btn-send" class="send-btn" data-icon="arrow-up" title="Send (Enter)"></button>
+        </div>
+      </div>
+    </footer>
+  </main>
+
+  <!-- ===== Settings ===== -->
+  <main id="settings-view" hidden>
+    <nav class="settings-tabs" role="tablist" aria-label="Settings sections">
+      <button role="tab" data-tab="models" data-icon="layers">Models</button>
+      <button role="tab" data-tab="commands" data-icon="list">Commands</button>
+      <button role="tab" data-tab="shortcuts" data-icon="keyboard">Shortcuts</button>
+      <button role="tab" data-tab="general" data-icon="settings">General</button>
+    </nav>
+
+    <div class="settings-body">
+      <!-- Models -->
+      <section class="tab-panel" data-tab-panel="models">
+        <p class="intro">Choose where answers come from. Switch a source off to hide its models from the model menu.</p>
+        <div id="source-list" class="source-list" role="listbox" aria-label="Model sources"></div>
+
+        <div class="prov-pane" data-prov="gemini" hidden>
+          <p class="help">Calls Google directly with your own key. Get a free key at aistudio.google.com/apikey.</p>
+          <label class="field">API key
+            <span class="key-row"><input class="input" type="password" data-role="key" autocomplete="off" spellcheck="false" placeholder="Paste a Gemini API key" /><span class="key-hint" data-role="hint"></span></span>
+          </label>
+          <div class="row"><button class="btn" data-role="load" data-icon="refresh-cw">Load models</button><button class="btn ghost" data-role="remove">Remove key</button></div>
+          <p class="meta" data-role="status"></p>
+          <div class="model-picker-list" data-role="picker" hidden>
+            <div class="picker-tools">
+              <input class="input" data-role="filter" placeholder="Filter models" />
+              <button type="button" class="chip" data-role="vision-only" aria-pressed="false" title="Show only models that can read images">Images only</button>
+              <button type="button" class="chip" data-role="speed" title="Measure how fast the ticked models start answering">Test speed</button>
+            </div>
+            <div class="model-list" data-role="list"></div>
+          </div>
+        </div>
+
+        <div class="prov-pane" data-prov="groq" hidden>
+          <p class="help">Calls Groq directly with your own key. Create one at console.groq.com/keys. Llama 4 models can read images.</p>
+          <label class="field">API key
+            <span class="key-row"><input class="input" type="password" data-role="key" autocomplete="off" spellcheck="false" placeholder="Paste a Groq API key" /><span class="key-hint" data-role="hint"></span></span>
+          </label>
+          <div class="row"><button class="btn" data-role="load" data-icon="refresh-cw">Load models</button><button class="btn ghost" data-role="remove">Remove key</button></div>
+          <p class="meta" data-role="status"></p>
+          <div class="model-picker-list" data-role="picker" hidden>
+            <div class="picker-tools">
+              <input class="input" data-role="filter" placeholder="Filter models" />
+              <button type="button" class="chip" data-role="vision-only" aria-pressed="false" title="Show only models that can read images">Images only</button>
+              <button type="button" class="chip" data-role="speed" title="Measure how fast the ticked models start answering">Test speed</button>
+            </div>
+            <div class="model-list" data-role="list"></div>
+          </div>
+        </div>
+
+        <div class="prov-pane" data-prov="local" hidden>
+          <p class="help">Any OpenAI-compatible server on this PC or your network, such as 9Router, Ollama or LM Studio.</p>
+          <label class="field">Server URL <input class="input" data-role="url" spellcheck="false" placeholder="http://127.0.0.1:11434/v1" /></label>
+          <div class="presets"><span class="help">Presets</span>
+            <button class="btn" data-preset="http://127.0.0.1:20128/v1 http://127.0.0.1:20127/v1" data-name="9Router">9Router</button>
+            <button class="btn" data-preset="http://127.0.0.1:11434/v1" data-name="Ollama">Ollama</button>
+            <button class="btn" data-preset="http://127.0.0.1:1234/v1" data-name="LM Studio">LM Studio</button>
+          </div>
+          <label class="field">Display name <input class="input" data-role="label" placeholder="Local" /></label>
+          <label class="field">API key (optional)
+            <span class="key-row"><input class="input" type="password" data-role="key" autocomplete="off" spellcheck="false" placeholder="Only if your server requires one" /><span class="key-hint" data-role="hint"></span></span>
+          </label>
+          <div class="row"><button class="btn" data-role="load" data-icon="refresh-cw">Load models</button><button class="btn ghost" data-role="remove">Remove key</button></div>
+          <p class="meta" data-role="status"></p>
+          <div class="model-picker-list" data-role="picker" hidden>
+            <div class="picker-tools">
+              <input class="input" data-role="filter" placeholder="Filter models" />
+              <button type="button" class="chip" data-role="vision-only" aria-pressed="false" title="Show only models that can read images">Images only</button>
+              <button type="button" class="chip" data-role="speed" title="Measure how fast the ticked models start answering">Test speed</button>
+            </div>
+            <div class="model-list" data-role="list"></div>
+          </div>
+        </div>
+
+        <div class="prov-pane" data-prov="cloud" hidden>
+          <p class="help">Your own deployed IntelliPointer backend: sign-in, quotas and server-side keys.</p>
+          <label class="field">Backend URL <input id="s-backendUrl" class="input" placeholder="https://your-api.onrender.com" /></label>
+          <label class="field">Firebase Web API key <input id="s-firebaseApiKey" class="input" placeholder="AIza…" />
+            <span class="help">Public project identifier from Firebase project settings. Not a secret.</span></label>
+          <div id="auth-out">
+            <label class="field">Email <input id="email" class="input" type="email" autocomplete="username" /></label>
+            <label class="field">Password <input id="password" class="input" type="password" autocomplete="current-password" /></label>
+            <div class="row">
+              <button id="btn-signin" class="btn primary">Sign in</button>
+              <button id="btn-signup" class="btn">Create account</button>
+            </div>
+          </div>
+          <div id="auth-in" hidden>
+            <div class="account-row">
+              <div>
+                <div id="who" class="strong"></div>
+                <div id="usage" class="meta"></div>
+              </div>
+              <button id="btn-signout" class="btn" data-icon="log-out">Sign out</button>
+            </div>
+          </div>
+          <p id="auth-msg" class="meta"></p>
+        </div>
+        <p class="help footnote">Keys are encrypted with Windows (DPAPI) and stay on this PC. Only the app's background process can read them.</p>
+      </section>
+
+      <!-- Commands -->
+      <section class="tab-panel" data-tab-panel="commands" hidden>
+        <p class="intro">Commands are one-click prompts. Pinned ones also appear in the screen toolbar and the Ask bar. Give a command a shortcut to run it on selected text from anywhere.</p>
+        <div id="command-list" class="command-list"></div>
+        <div class="row">
+          <button id="btn-add-command" class="btn" data-icon="plus">New command</button>
+          <span class="spacer"></span>
+          <button id="btn-reset-commands" class="btn ghost">Restore defaults</button>
+        </div>
+        <div id="command-editor" class="sheet-backdrop" hidden>
+        <div class="command-editor" role="dialog" aria-modal="true" aria-labelledby="cmd-title">
+          <h3 id="cmd-title" class="sheet-title">New command</h3>
+          <label class="field">Name <input id="cmd-name" class="input" maxlength="40" placeholder="For example: Explain like I'm 12" /></label>
+          <label class="field">Prompt <textarea id="cmd-prompt" class="input textarea" rows="4" maxlength="4000" placeholder="What should the model do with the selection?"></textarea>
+            <span class="help">Sent together with the selected text or screen region.</span></label>
+          <label class="toggle-row"><span><span class="strong">Pin to toolbars</span><span class="help">Show in the screen toolbar and the Ask bar (up to 4).</span></span><input type="checkbox" class="switch" id="cmd-pinned" /></label>
+          <label class="toggle-row"><span><span class="strong">Search the web</span><span class="help">Ground the answer with web results (Gemini models).</span></span><input type="checkbox" class="switch" id="cmd-web" /></label>
+          <div class="field"><span>Shortcut</span><div id="cmd-shortcut"></div>
+            <span class="help">Runs on the selected text, or lets you select a screen region if nothing is selected.</span></div>
+          <div class="row">
+            <span id="cmd-error" class="meta error-text"></span>
+            <span class="spacer"></span>
+            <button id="btn-cmd-cancel" class="btn">Cancel</button>
+            <button id="btn-cmd-done" class="btn primary">Done</button>
+          </div>
+        </div>
+        </div>
+      </section>
+
+      <!-- Shortcuts -->
+      <section class="tab-panel" data-tab-panel="shortcuts" hidden>
+        <p class="intro">Click a shortcut, then press the keys you want. Each is checked against other apps on this PC.</p>
+        <div class="shortcut-row"><div><div class="strong">Select a screen region</div><div class="help">Freeze the screen and mark what to ask about.</div></div><div id="hk-capture-input"></div></div>
+        <div class="shortcut-row"><div><div class="strong">Ask about selected text</div><div class="help">Works in any app; falls back to the clipboard.</div></div><div id="hk-selection-input"></div></div>
+        <p class="help">Command shortcuts are set on each command in Commands.</p>
+        <button id="btn-reset-shortcuts" class="btn ghost">Restore default shortcuts</button>
+      </section>
+
+      <!-- General -->
+      <section class="tab-panel" data-tab-panel="general" hidden>
+        <h2>Behaviour</h2>
+        <label class="field">Default command <select id="s-defaultAction" class="select"></select>
+          <span class="help">Runs when you press Enter with an empty question.</span></label>
+        <label class="toggle-row"><span><span class="strong">Ask bar on text selection</span><span class="help">Reads the selection on this PC. Nothing is sent until you click.</span></span><input type="checkbox" class="switch" id="s-selectionBubble" /></label>
+        <label class="toggle-row"><span><span class="strong">Local OCR</span><span class="help">Extract text from screen regions on this PC.</span></span><input type="checkbox" class="switch" id="s-ocrEnabled" /></label>
+        <label class="toggle-row"><span><span class="strong">Local-only mode</span><span class="help">Only use models on your local server. Nothing goes to cloud providers.</span></span><input type="checkbox" class="switch" id="s-localOnly" /></label>
+        <label class="field">Conversation turns kept <input id="s-maxTurns" class="input narrow" type="number" min="1" max="50" /></label>
+
+        <h2>Performance</h2>
+        <label class="toggle-row"><span><span class="strong">GPU acceleration</span><span class="help">Off uses about 100 MB less memory with no visible difference. Applies after restarting the app.</span></span><input type="checkbox" class="switch" id="s-hardwareAcceleration" /></label>
+
+        <h2>Privacy and diagnostics</h2>
+        <p class="help">Screenshots and conversations stay in memory only. They are never written to disk or stored in the cloud, and are erased when you clear the conversation or quit.</p>
+        <div class="row">
+          <button id="btn-latency" class="btn" data-icon="external-link">Latency log</button>
+          <button id="btn-diagnostics" class="btn" data-icon="external-link">Diagnostics log</button>
+        </div>
+        <p id="version" class="help"></p>
+      </section>
+    </div>
+
+    <footer class="settings-footer">
+      <span id="settings-msg" class="meta"></span>
+      <button id="btn-back" class="btn">Cancel</button>
+      <button id="btn-save" class="btn primary">Save</button>
+    </footer>
+  </main>
+
+  <script src="../../../node_modules/marked/lib/marked.umd.js"></script>
+  <script src="../../../node_modules/dompurify/dist/purify.min.js"></script>
+  <script src="../../../node_modules/@highlightjs/cdn-assets/highlight.min.js"></script>
+  <script src="../shared/icons.js"></script>
+  <script src="model-menu.js"></script>
+  <script src="shortcut-input.js"></script>
+  <script src="settings-view.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>

@@ -1,8 +1,9 @@
-/* Floating panel: screen context, conversation, composer, settings.
+/* Floating panel: attached context, conversation and composer.
+   The model menu (model-menu.js) and settings (settings-view.js) are
+   separate components wired up at the bottom of this file.
    All network access goes through window.ip (main process). */
 (() => {
   const $ = (id) => document.getElementById(id);
-  const ACTIONS = window.IP_ACTIONS;
 
   let settings = {};
   let models = [];
@@ -44,9 +45,17 @@
   }
 
   const webSearchOn = () => $('web-search').getAttribute('aria-pressed') === 'true';
-  const modelName = (m) => m.label.split(' · ').pop();
 
-  const selectedModel = () => models.find((m) => m.id === $('model').value) || null;
+  const modelMenu = window.IPModelMenu({
+    button: $('model-button'),
+    popover: $('model-menu'),
+    onChange: (id) => {
+      updatePrivacy();
+      window.ip.updateSettings({ defaultModel: id }).catch(() => {});
+    },
+    onManage: () => openSettings('models'),
+  });
+  const selectedModel = () => models.find((m) => m.id === modelMenu.value) || null;
 
   function scrollDown() {
     const c = $('conversation');
@@ -68,26 +77,8 @@
       models = [];
       errors = [{ source: 'Models', message: cleanErr(err) }];
     }
-    const sel = $('model');
-    const keep = sel.value || settings.defaultModel;
-    sel.innerHTML = '';
-    const groups = new Map();
-    for (const m of models) {
-      if (!groups.has(m.group)) {
-        const g = document.createElement('optgroup');
-        g.label = m.group;
-        groups.set(m.group, g);
-        sel.appendChild(g);
-      }
-      const o = document.createElement('option');
-      o.value = m.id;
-      o.textContent = `${modelName(m)}${m.latencyMs ? ` · ${fmtSpeed(m.latencyMs)}` : ''}${m.vision ? '' : ' (text only)'}`;
-      o.title = m.label;
-      groups.get(m.group).appendChild(o);
-    }
-    if (models.some((m) => m.id === keep)) sel.value = keep;
+    modelMenu.setModels(models, modelMenu.value || settings.defaultModel);
     if (!models.length) {
-      sel.innerHTML = '<option value="">No model selected</option>';
       const why = errors.length ? errors.map((e) => `${e.source}: ${e.message}`).join(' ') : 'Add a Gemini or Groq key, or a local server, to choose models.';
       banner(why, { label: 'Settings', onClick: openSettings });
     } else {
@@ -458,8 +449,9 @@
     }
   });
 
+  // Runs a command (Settings → Commands) on the current context.
   function runAction(id) {
-    const a = ACTIONS.find((x) => x.id === id);
+    const a = (settings.commands || []).find((x) => x.id === id);
     if (!a) return;
     // Text-only shortcut: for define/translate with clean OCR, skip the image upload.
     if (context?.images.length && a.cacheable && context.ocr.status === 'done' && context.ocr.text && context.ocr.confidence >= 80) {
@@ -487,385 +479,64 @@
     window.ip.resize($('titlebar').offsetHeight + $('composer-area').offsetHeight + 2);
   }
 
+  // ---------- commands ----------
+
+  // One button per command, in the user's order (Settings → Commands).
+  function renderCommandButtons() {
+    const row = $('quick-actions');
+    row.innerHTML = '';
+    for (const c of settings.commands || []) {
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.textContent = c.name;
+      b.title = c.prompt;
+      b.addEventListener('click', () => runAction(c.id));
+      row.appendChild(b);
+    }
+  }
+
   // ---------- settings ----------
 
-  const SETTING_FIELDS = ['backendUrl', 'firebaseApiKey', 'defaultAction', 'localOnly', 'ocrEnabled', 'selectionBubble', 'maxTurns', 'captureHotkey', 'clipboardHotkey'];
-
-  async function refreshAuth() {
-    const s = await window.ip.authStatus();
-    $('auth-out').hidden = s.signedIn;
-    $('auth-in').hidden = !s.signedIn;
-    $('who').textContent = s.email || '';
-    $('auth-msg').textContent = s.secureStorage ? '' : 'Windows secure storage is unavailable, so you will need to sign in again after restarting.';
-    if (s.signedIn) {
-      try {
-        const u = await window.ip.usage();
-        $('usage').textContent = `${u.used} of ${u.limit} requests used today${u.outputTokens ? ` · ${u.outputTokens.toLocaleString()} output tokens` : ''}`;
-      } catch (err) {
-        $('usage').textContent = cleanErr(err);
-      }
-    }
-  }
-
-  // ---------- settings: model sources ----------
-
-  const PROVS = ['gemini', 'groq', 'local'];
-  const provDraft = {}; // { [prov]: { rows: Map(id -> { use, vision }), removeKey } }
-  const pane = (p) => document.querySelector(`.prov-pane[data-prov="${p}"]`);
-  const role = (p, r) => pane(p).querySelector(`[data-role="${r}"]`);
-
-  function selectProvTab(p) {
-    for (const b of document.querySelectorAll('[data-prov-tab]')) b.setAttribute('aria-selected', String(b.dataset.provTab === p));
-    for (const el of document.querySelectorAll('.prov-pane')) el.hidden = el.dataset.prov !== p;
-  }
-
-  function setProvStatus(p, text, isError = false) {
-    const s = role(p, 'status');
-    s.textContent = text;
-    s.classList.toggle('error-text', isError);
-  }
-
-  function updateModelCount(p) {
-    const rows = [...provDraft[p].rows.values()];
-    const used = rows.filter((r) => r.use).length;
-    const vision = rows.filter((r) => r.vision).length;
-    setProvStatus(p, rows.length ? `${used} of ${rows.length} models shown in the model menu · ${vision} can read images.` : '');
-  }
-
-  const fmtSpeed = (ms) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
-
-  // Ticked models first, then fastest measured, then by name.
-  function sortedIds(draft) {
-    return [...draft.rows.keys()].sort((a, b) => {
-      const ra = draft.rows.get(a);
-      const rb = draft.rows.get(b);
-      if (ra.use !== rb.use) return ra.use ? -1 : 1;
-      const la = ra.latencyMs ?? Infinity;
-      const lb = rb.latencyMs ?? Infinity;
-      return la !== lb ? la - lb : a.localeCompare(b);
-    });
-  }
-
-  function renderModelList(p) {
-    const draft = provDraft[p];
-    const list = role(p, 'list');
-    const filter = role(p, 'filter').value.trim().toLowerCase();
-    role(p, 'picker').hidden = draft.rows.size === 0;
-    list.innerHTML = '';
-    const ids = sortedIds(draft).filter((id) => id.toLowerCase().includes(filter) && (!draft.visionOnly || draft.rows.get(id).vision));
-    if (!ids.length && draft.rows.size) list.innerHTML = '<div class="model-empty">No models match.</div>';
-    for (const id of ids) {
-      const row = draft.rows.get(id);
-      const el = document.createElement('div');
-      el.className = 'model-row';
-      const use = document.createElement('label');
-      use.className = 'model-use';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = row.use;
-      cb.addEventListener('change', () => {
-        row.use = cb.checked;
-        updateModelCount(p);
-      });
-      const name = document.createElement('span');
-      name.className = 'model-id';
-      name.textContent = id;
-      name.title = id;
-      use.append(cb, name);
-
-      const tags = document.createElement('span');
-      tags.className = 'model-tags';
-      if (row.reasoning) {
-        const t = document.createElement('span');
-        t.className = 'tag';
-        t.textContent = 'reasoning';
-        t.title = 'Thinks before answering, so it is usually slower to start';
-        tags.appendChild(t);
-      }
-      if (row.testing || row.latencyMs || row.error) {
-        const sp = document.createElement('span');
-        sp.className = 'speed';
-        if (row.testing) {
-          sp.textContent = 'testing…';
-        } else if (row.error) {
-          sp.textContent = 'failed';
-          sp.classList.add('slow');
-          sp.title = row.error;
-        } else {
-          sp.textContent = fmtSpeed(row.latencyMs);
-          sp.classList.add(row.latencyMs < 1500 ? 'fast' : row.latencyMs < 4000 ? 'ok' : 'slow');
-          sp.title = 'Time until the first word of a reply (measured on this PC)';
-        }
-        tags.appendChild(sp);
-      }
-
-      const vision = document.createElement('button');
-      vision.type = 'button';
-      vision.className = 'vision-toggle';
-      vision.title = row.visionSource === 'server'
-        ? 'Image support as reported by the server (click to override)'
-        : 'Whether this model can read images (screen captures)';
-      vision.setAttribute('aria-pressed', String(row.vision));
-      vision.innerHTML = window.ipIcon('image', 12);
-      vision.append('Images');
-      vision.addEventListener('click', () => {
-        row.vision = !row.vision;
-        vision.setAttribute('aria-pressed', String(row.vision));
-      });
-      el.append(use, tags, vision);
-      list.appendChild(el);
-    }
-    updateModelCount(p);
-  }
-
-  // Measures time-to-first-word for the ticked models (or the visible ones
-  // if none are ticked), three at a time, then re-sorts fastest first.
-  async function testSpeeds(p) {
-    const draft = provDraft[p];
-    const btn = role(p, 'speed');
-    const filter = role(p, 'filter').value.trim().toLowerCase();
-    let ids = sortedIds(draft).filter((id) => draft.rows.get(id).use);
-    if (!ids.length) ids = sortedIds(draft).filter((id) => id.toLowerCase().includes(filter) && (!draft.visionOnly || draft.rows.get(id).vision)).slice(0, 8);
-    if (!ids.length) return;
-    btn.disabled = true;
-    const opts = { apiKey: role(p, 'key').value.trim() || undefined };
-    if (p === 'local') opts.baseUrl = role(p, 'url').value.trim();
-    for (const id of ids) Object.assign(draft.rows.get(id), { testing: true, error: null });
-    renderModelList(p);
-    const queue = [...ids];
-    const worker = async () => {
-      while (queue.length) {
-        const id = queue.shift();
-        const row = draft.rows.get(id);
-        const res = await window.ip.speedTest(p, id, opts).catch((err) => ({ ok: false, error: cleanErr(err) }));
-        Object.assign(row, { testing: false, latencyMs: res.ok ? res.firstTokenMs : null, error: res.ok ? null : res.error });
-        renderModelList(p);
-      }
-    };
-    await Promise.all([worker(), worker(), worker()]);
-    btn.disabled = false;
-    const ok = ids.map((id) => [id, draft.rows.get(id)]).filter(([, r]) => r.latencyMs).sort((a, b) => a[1].latencyMs - b[1].latencyMs);
-    setProvStatus(p, ok.length
-      ? `Tested ${ids.length}. Fastest: ${ok[0][0]} (${fmtSpeed(ok[0][1].latencyMs)}). Save to order the model menu fastest first.`
-      : 'None of the tested models replied. Hover "failed" to see why.', !ok.length);
-  }
-
-  async function loadProviderSettings() {
-    const status = await window.ip.providerStatus();
-    $('s-cloudEnabled').checked = status.providers.cloud.enabled;
-    for (const p of PROVS) {
-      provDraft[p] = {
-        rows: new Map(status.providers[p].models.map((m) => [m.id, { use: true, vision: m.vision, reasoning: m.reasoning, latencyMs: m.latencyMs }])),
-        removeKey: false,
-        visionOnly: false,
-      };
-      role(p, 'vision-only').setAttribute('aria-pressed', 'false');
-      role(p, 'key').value = '';
-      role(p, 'hint').textContent = status.keys[p].set ? `Saved ${status.keys[p].hint}` : '';
-      role(p, 'remove').hidden = !status.keys[p].set;
-      role(p, 'filter').value = '';
-      renderModelList(p);
-      const configured = p === 'local' ? Boolean(status.providers.local.baseUrl) : status.keys[p].set;
-      if (configured && !provDraft[p].rows.size) setProvStatus(p, 'Click Load models to choose which models to use.');
-    }
-    role('local', 'url').value = status.providers.local.baseUrl;
-    role('local', 'label').value = status.providers.local.label === 'Local' ? '' : status.providers.local.label;
-    // Dot on tabs that are set up.
-    for (const b of document.querySelectorAll('[data-prov-tab]')) {
-      const p = b.dataset.provTab;
-      const on = p === 'cloud' ? status.providers.cloud.enabled : p === 'local' ? Boolean(status.providers.local.baseUrl) : status.keys[p].set;
-      b.querySelector('.dot')?.remove();
-      if (on) b.insertAdjacentHTML('beforeend', '<span class="dot" title="Set up"></span>');
-    }
-    return status;
-  }
-
-  // First load: tick a few sensible defaults so the model menu isn't empty.
-  // For servers that report capabilities (9Router), prefer fast vision models.
-  function preselect(p, fetched) {
-    const prefer = {
-      gemini: [/^gemini-flash-latest$/, /^gemini-flash-lite-latest$/, /^gemini-pro-latest$/],
-      groq: [/llama-4-scout/, /llama-3\.3-70b/, /llama-4-maverick/],
-      local: [],
-    }[p];
-    let picked = fetched.filter((m) => prefer.some((re) => re.test(m.id)));
-    if (!picked.length) {
-      const quick = /fast|flash|mini|lite|haiku|scout|turbo|instant|small/i;
-      const score = (m) => (m.vision ? 4 : 0) + (m.reasoning ? 0 : 2) + (quick.test(m.id) ? 1 : 0);
-      picked = [...fetched].sort((a, b) => score(b) - score(a));
-    }
-    for (const m of picked.slice(0, 4)) provDraft[p].rows.get(m.id).use = true;
-  }
-
-  async function fetchProviderModels(p) {
-    const btn = role(p, 'load');
-    btn.disabled = true;
-    setProvStatus(p, 'Loading models…');
-    try {
-      const opts = { apiKey: role(p, 'key').value.trim() || undefined };
-      if (p === 'local') opts.baseUrl = role(p, 'url').value.trim();
-      const fetched = await window.ip.fetchProviderModels(p, opts);
-      const draft = provDraft[p];
-      const anyUsed = [...draft.rows.values()].some((r) => r.use);
-      const merged = new Map();
-      for (const m of fetched) {
-        const prev = draft.rows.get(m.id);
-        merged.set(m.id, {
-          use: prev?.use ?? false,
-          // The server's capability report wins over an earlier guess.
-          vision: m.visionSource === 'server' || !prev ? m.vision : prev.vision,
-          visionSource: m.visionSource,
-          reasoning: m.reasoning,
-          latencyMs: prev?.latencyMs ?? null,
-        });
-      }
-      // Keep chosen models even if the server no longer lists them.
-      for (const [id, row] of draft.rows) if (row.use && !merged.has(id)) merged.set(id, row);
-      draft.rows = merged;
-      if (!anyUsed) preselect(p, fetched);
-      renderModelList(p);
-      if (!fetched.length) setProvStatus(p, 'The server returned no chat models.', true);
-      return true;
-    } catch (err) {
-      setProvStatus(p, cleanErr(err), true);
-      return false;
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
-  function providerPatch() {
-    const patch = { cloud: { enabled: $('s-cloudEnabled').checked } };
-    for (const p of PROVS) {
-      const typed = role(p, 'key').value.trim();
-      const draft = provDraft[p];
-      // Saved in speed order, so the model menu lists the fastest first.
-      patch[p] = {
-        models: sortedIds(draft).filter((id) => draft.rows.get(id).use).map((id) => {
-          const r = draft.rows.get(id);
-          return { id, vision: r.vision, reasoning: Boolean(r.reasoning), latencyMs: r.latencyMs ?? null };
-        }),
-      };
-      if (typed) patch[p].apiKey = typed;
-      else if (draft.removeKey) patch[p].apiKey = '';
-    }
-    patch.local.baseUrl = role('local', 'url').value.trim();
-    patch.local.label = role('local', 'label').value.trim();
-    return patch;
-  }
-
-  async function openSettings() {
-    settings = await window.ip.getSettings();
-    const status = await loadProviderSettings();
-    const firstSetUp = ['gemini', 'groq', 'local', 'cloud'].find((p) =>
-      p === 'cloud' ? false : p === 'local' ? status.providers.local.baseUrl : status.keys[p].set);
-    selectProvTab(firstSetUp || (status.providers.cloud.enabled && settings.firebaseApiKey ? 'cloud' : 'gemini'));
-    for (const f of SETTING_FIELDS) {
-      const el = $(`s-${f}`);
-      if (el.type === 'checkbox') el.checked = settings[f];
-      else el.value = settings[f];
-    }
-    const b = settings.build || {};
-    $('version').textContent = `Version ${b.version || '?'} · ${b.commit === 'source' ? 'running from source' : `build ${b.commit}`}${b.builtAt ? ` · ${new Date(b.builtAt).toLocaleString()}` : ''}`;
-    $('chat-view').hidden = true;
-    $('settings-view').hidden = false;
-    $('btn-settings').setAttribute('aria-pressed', 'true');
-    $('settings-msg').textContent = '';
-    expand();
-    refreshAuth();
-  }
-
-  function closeSettings() {
-    $('settings-view').hidden = true;
-    $('chat-view').hidden = false;
-    $('btn-settings').setAttribute('aria-pressed', 'false');
-  }
-
-  async function saveSettings() {
-    const patch = {};
-    for (const f of SETTING_FIELDS) {
-      const el = $(`s-${f}`);
-      patch[f] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value.trim();
-    }
-    try {
-      const res = await window.ip.updateSettings(patch);
-      await window.ip.saveProviders(providerPatch());
-      settings = await window.ip.getSettings();
+  const settingsView = window.IPSettingsView({
+    cleanErr,
+    onSaved: (next) => {
+      settings = next;
       applySettings();
-      await loadProviderSettings();
-      $('settings-msg').textContent = res.hotkeyErrors.length ? `Saved, but these hotkeys are taken: ${res.hotkeyErrors.join(', ')}` : 'Saved';
       loadModels();
-    } catch (err) {
-      $('settings-msg').textContent = cleanErr(err);
-    }
-  }
-
-  async function doSignIn(create) {
-    $('auth-msg').textContent = create ? 'Creating account…' : 'Signing in…';
-    try {
-      // Save connection fields first so the API key is available.
-      await saveSettings();
-      await window.ip.signIn({ email: $('email').value.trim(), password: $('password').value, create });
-      $('password').value = '';
-      await refreshAuth();
-      loadModels();
-    } catch (err) {
-      $('auth-msg').textContent = cleanErr(err);
-    }
-  }
+    },
+  });
+  const openSettings = (tab) => settingsView.open(typeof tab === 'string' ? tab : 'models');
 
   function prettyHotkey(h) {
-    return h.replace('CommandOrControl', 'Ctrl');
+    return String(h || '').replace(/CommandOrControl|CmdOrCtrl/g, 'Ctrl').replace(/Super/g, 'Win');
+  }
+
+  function renderKeys(el, accelerator) {
+    el.innerHTML = '';
+    for (const part of prettyHotkey(accelerator).split('+')) {
+      const k = document.createElement('kbd');
+      k.textContent = part;
+      el.appendChild(k);
+    }
   }
 
   function applySettings() {
-    $('hk-capture').textContent = prettyHotkey(settings.captureHotkey);
-    $('hk-clip').textContent = prettyHotkey(settings.clipboardHotkey);
+    renderKeys($('hk-capture'), settings.activeHotkeys?.captureHotkey || settings.captureHotkey);
+    renderKeys($('hk-selection'), settings.activeHotkeys?.selectionHotkey || settings.selectionHotkey);
+    renderCommandButtons();
     updatePrivacy();
   }
 
   // ---------- wiring ----------
 
   window.ipApplyIcons();
-  document.querySelectorAll('.logo').forEach((l) => l.setAttribute('role', 'presentation'));
 
-  for (const b of document.querySelectorAll('[data-prov-tab]')) b.addEventListener('click', () => selectProvTab(b.dataset.provTab));
-  for (const p of PROVS) {
-    role(p, 'load').addEventListener('click', () => fetchProviderModels(p));
-    role(p, 'filter').addEventListener('input', () => renderModelList(p));
-    role(p, 'speed').addEventListener('click', () => testSpeeds(p));
-    role(p, 'vision-only').addEventListener('click', () => {
-      provDraft[p].visionOnly = !provDraft[p].visionOnly;
-      role(p, 'vision-only').setAttribute('aria-pressed', String(provDraft[p].visionOnly));
-      renderModelList(p);
-    });
-    role(p, 'key').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') fetchProviderModels(p);
-    });
-    role(p, 'remove').addEventListener('click', () => {
-      provDraft[p].removeKey = true;
-      role(p, 'key').value = '';
-      role(p, 'hint').textContent = 'Removed when you save';
-      role(p, 'remove').hidden = true;
-    });
-  }
-  for (const b of pane('local').querySelectorAll('[data-preset]')) {
-    // A preset may list several URLs (9Router: production port, then dev port);
-    // the first one that answers is kept.
-    b.addEventListener('click', async () => {
-      role('local', 'label').value = b.dataset.name;
-      for (const url of b.dataset.preset.split(' ')) {
-        role('local', 'url').value = url;
-        if (await fetchProviderModels('local')) return;
-      }
-    });
-  }
   $('clip-more').addEventListener('click', () => {
     if (!context) return;
     context.clipExpanded = !context.clipExpanded;
     renderContext();
   });
-  // Mouse wheel scrolls the quick-action row sideways.
+  // Mouse wheel scrolls the command row sideways.
   $('quick-actions').addEventListener('wheel', (e) => {
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
       $('quick-actions').scrollLeft += e.deltaY;
@@ -873,23 +544,12 @@
     }
   }, { passive: false });
 
-  for (const a of ACTIONS) {
-    const b = document.createElement('button');
-    b.className = 'btn';
-    b.textContent = a.label;
-    b.title = a.prompt;
-    b.addEventListener('click', () => runAction(a.id));
-    $('quick-actions').appendChild(b);
-  }
-  const sel = $('s-defaultAction');
-  for (const a of ACTIONS) sel.add(new Option(a.label, a.id));
-
   $('input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       const v = $('input').value;
       if (!v.trim()) {
-        // Empty Enter runs the default quick action.
+        // Empty Enter runs the default command.
         runAction(settings.defaultAction);
         return;
       }
@@ -912,7 +572,7 @@
   $('btn-new').addEventListener('click', () => newConversation(true));
   $('btn-newchat').addEventListener('click', () => {
     newConversation(true);
-    closeSettings();
+    settingsView.close();
     $('input').focus();
   });
   $('web-search').addEventListener('click', () => {
@@ -920,10 +580,6 @@
   });
   $('send-image').addEventListener('change', updatePrivacy);
   $('send-ocr').addEventListener('change', updatePrivacy);
-  $('model').addEventListener('change', () => {
-    updatePrivacy();
-    window.ip.updateSettings({ defaultModel: $('model').value }).catch(() => {});
-  });
   $('btn-pin').addEventListener('click', async () => {
     const btn = $('btn-pin');
     const pinned = await window.ip.pin(btn.getAttribute('aria-pressed') !== 'true');
@@ -932,24 +588,15 @@
     btn.title = pinned ? 'Keep on top' : 'Not kept on top';
   });
   $('btn-collapse').addEventListener('click', () => (document.body.classList.contains('collapsed') ? expand() : collapse()));
-  $('btn-settings').addEventListener('click', () => ($('settings-view').hidden ? openSettings() : closeSettings()));
+  $('btn-settings').addEventListener('click', () => (settingsView.isOpen ? settingsView.close() : openSettings()));
   $('btn-close').addEventListener('click', () => window.ip.hide());
-  $('btn-save').addEventListener('click', saveSettings);
-  $('btn-back').addEventListener('click', closeSettings);
-  $('btn-signin').addEventListener('click', () => doSignIn(false));
-  $('btn-signup').addEventListener('click', () => doSignIn(true));
-  $('btn-signout').addEventListener('click', async () => {
-    await window.ip.signOut();
-    refreshAuth();
-  });
-  $('btn-latency').addEventListener('click', () => window.ip.openLatencyLog());
-  $('btn-diagnostics').addEventListener('click', () => window.ip.openDiagnostics());
+  window.ip.onOpenSettings(() => openSettings());
 
   (async () => {
     settings = await window.ip.getSettings();
     applySettings();
     await loadModels();
-    const auth = await window.ip.authStatus();
-    if (!auth.signedIn && !settings.firebaseApiKey && !models.length) openSettings();
+    // First run with nothing set up: go straight to choosing a model source.
+    if (!models.length) openSettings('models');
   })();
 })();

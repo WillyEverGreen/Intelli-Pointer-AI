@@ -1,12 +1,22 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { app } = require('electron');
+const commands = require('./commands');
 
 // Non-secret user preferences, stored as JSON in the app's userData folder.
 // Secrets live elsewhere, encrypted with safeStorage: the Firebase refresh
 // token in auth.js and provider API keys in secrets.js.
 
 const PROVIDER_IDS = ['gemini', 'groq', 'local'];
+
+// Default shortcuts: adjacent keys, one hand. If one is taken on this PC,
+// main.js falls back to the next free entry in HOTKEY_FALLBACKS.
+const HOTKEY_FALLBACKS = {
+  captureHotkey: ['Alt+Shift+S', 'Ctrl+Alt+S', 'Ctrl+Shift+Space'],
+  selectionHotkey: ['Alt+Shift+A', 'Ctrl+Alt+A', 'Ctrl+Shift+X'],
+};
+// Defaults of earlier versions, migrated to the new ones on load.
+const OLD_DEFAULT_HOTKEYS = new Set(['CommandOrControl+Shift+Space', 'CommandOrControl+Shift+X']);
 
 const DEFAULTS = {
   backendUrl: 'http://127.0.0.1:8080',
@@ -17,19 +27,21 @@ const DEFAULTS = {
   ocrEnabled: true,
   maskOutside: true,
   maxTurns: 10,
-  captureHotkey: 'CommandOrControl+Shift+Space',
-  clipboardHotkey: 'CommandOrControl+Shift+X',
+  captureHotkey: HOTKEY_FALLBACKS.captureHotkey[0],
+  selectionHotkey: HOTKEY_FALLBACKS.selectionHotkey[0],
   selectionBubble: true,
   // GPU acceleration costs ~100-150 MB for a GPU process; the UI is simple
   // enough to render in software at full speed. Takes effect after restart.
   hardwareAcceleration: false,
-  // Model sources. `models` is the user's chosen list: [{ id, vision }].
+  // Model sources. `enabled` = shown in the model menu; `models` is the
+  // user's chosen list: [{ id, vision, reasoning, latencyMs }].
   providers: {
-    cloud: { enabled: true },
-    gemini: { models: [] },
-    groq: { models: [] },
-    local: { baseUrl: '', label: 'Local', models: [] },
+    cloud: { enabled: false },
+    gemini: { enabled: true, models: [] },
+    groq: { enabled: true, models: [] },
+    local: { enabled: true, baseUrl: '', label: 'Local', models: [] },
   },
+  commands: commands.DEFAULT_COMMANDS,
 };
 
 let cache = null;
@@ -44,7 +56,17 @@ function load() {
     /* first run */
   }
   cache = { ...structuredClone(DEFAULTS), ...saved };
-  cache.providers = { ...structuredClone(DEFAULTS.providers), ...(saved.providers || {}) };
+  cache.providers = { ...structuredClone(DEFAULTS.providers) };
+  for (const [id, p] of Object.entries(saved.providers || {})) cache.providers[id] = { ...cache.providers[id], ...p };
+  cache.commands = commands.clean(saved.commands ?? DEFAULTS.commands);
+  // Migrations from earlier versions.
+  if ('clipboardHotkey' in saved) {
+    if (!('selectionHotkey' in saved)) cache.selectionHotkey = saved.clipboardHotkey;
+    delete cache.clipboardHotkey;
+  }
+  for (const key of ['captureHotkey', 'selectionHotkey']) {
+    if (OLD_DEFAULT_HOTKEYS.has(cache[key])) cache[key] = DEFAULTS[key];
+  }
   return cache;
 }
 
@@ -82,7 +104,9 @@ function cleanModels(list) {
 
 function cleanProviders(current, patch) {
   const next = structuredClone(current);
-  if (patch.cloud && typeof patch.cloud.enabled === 'boolean') next.cloud.enabled = patch.cloud.enabled;
+  for (const id of ['cloud', ...PROVIDER_IDS]) {
+    if (typeof patch[id]?.enabled === 'boolean') next[id].enabled = patch[id].enabled;
+  }
   for (const id of PROVIDER_IDS) {
     if (patch[id]?.models !== undefined) next[id].models = cleanModels(patch[id].models);
   }
@@ -101,10 +125,12 @@ function update(patch) {
   const current = load();
   const next = { ...current };
   for (const [key, value] of Object.entries(patch || {})) {
-    if (key === 'providers' || !(key in DEFAULTS) || typeof value !== typeof DEFAULTS[key]) continue;
+    if (key === 'providers' || key === 'commands' || !(key in DEFAULTS) || typeof value !== typeof DEFAULTS[key]) continue;
     next[key] = value;
   }
   if (patch?.providers && typeof patch.providers === 'object') next.providers = cleanProviders(current.providers, patch.providers);
+  if (Array.isArray(patch?.commands)) next.commands = commands.clean(patch.commands);
+  for (const key of ['captureHotkey', 'selectionHotkey']) next[key] = String(next[key] || '').slice(0, 60);
   if (next.backendUrl) next.backendUrl = checkUrl(next.backendUrl, 'Backend URL').origin;
   next.maxTurns = Math.min(50, Math.max(1, Math.round(next.maxTurns)));
   cache = next;
@@ -113,4 +139,4 @@ function update(patch) {
   return get();
 }
 
-module.exports = { get, update, DEFAULTS, PROVIDER_IDS, checkUrl };
+module.exports = { get, update, DEFAULTS, PROVIDER_IDS, HOTKEY_FALLBACKS, checkUrl };

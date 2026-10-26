@@ -48,7 +48,7 @@ function createOverlay(display) {
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setContentProtection(true); // excluded from screenshots, including our own
   win.setBounds(display.bounds); // re-apply: Windows may adjust bounds on mixed-DPI setups
-  win.loadFile(path.join(__dirname, '..', 'renderer', 'overlay.html'), { query: { displayId: String(display.id) } });
+  win.loadFile(path.join(__dirname, '..', 'renderer', 'overlay', 'overlay.html'), { query: { displayId: String(display.id) } });
   win.webContents.on('console-message', (e) => {
     if (e.level === 'error' || e.level === 3) log('overlay.console_error', { message: String(e.message).slice(0, 300) });
   });
@@ -117,7 +117,8 @@ async function grabWithElectron(displays) {
 // Opens the overlays immediately and captures the screens behind them.
 // Resolves with the user's confirmed selection
 // { displayId, displayBounds, regions, action, captureMs, overlayShownMs } or null if cancelled.
-function startSelection() {
+// `commands`: pinned commands for the toolbar; `presetAction`: highlighted one.
+function startSelection({ commands = [], presetAction = null } = {}) {
   if (session) return Promise.resolve(null);
   const t0 = performance.now();
   const displays = screen.getAllDisplays();
@@ -132,7 +133,7 @@ function startSelection() {
       clearTimeout(hideTimers.get(d.id));
       win.setOpacity(1);
       win.setBounds(d.bounds);
-      win.webContents.send('overlay:show', { scaleFactor: d.scaleFactor });
+      win.webContents.send('overlay:show', { scaleFactor: d.scaleFactor, commands, presetAction });
       win.showInactive();
     }
     const focusWin = overlays.get(cursorDisplay.id);

@@ -5,4 +5,5 @@ contextBridge.exposeInMainWorld('bubble', {
   act: (actionId) => ipcRenderer.send('bubble:action', actionId),
   close: () => ipcRenderer.send('bubble:close'),
   hover: (inside) => ipcRenderer.send('bubble:hover', inside),
+  resize: (width, height) => ipcRenderer.send('bubble:resize', width, height),
 });

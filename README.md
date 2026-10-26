@@ -6,12 +6,14 @@ Mark anything on your Windows screen, ask an AI about it, and get a streamed ans
 - **Cloud API** (`backend/`, Node.js + Express): Firebase login check, per-user quota, request validation, AI provider routing, SSE streaming.
 - **Firebase** (free Spark plan): Authentication for users, Firestore for per-user usage counters.
 
+> Developer guide for the desktop app (code layout, extending, performance budget): [`desktop/README.md`](desktop/README.md).
+
 ## Architecture
 
 ```mermaid
 flowchart LR
   subgraph PC["Windows PC — IntelliPointer desktop (Electron)"]
-    HK["Global hotkey<br/>Ctrl+Shift+Space"] --> CAP["desktopCapturer<br/>(all monitors, physical px)"]
+    HK["Global shortcut<br/>Alt+Shift+S"] --> CAP["Native helper BitBlt<br/>(all monitors, physical px)"]
     CAP --> OV["Selection overlay<br/>rect · square · ellipse · lasso<br/>pen · arrow · highlight · blur"]
     OV --> OCR["Local OCR<br/>tesseract.js (WASM)"]
     OV --> PANEL["Floating panel<br/>composer · stream · follow-ups"]
@@ -40,7 +42,7 @@ flowchart LR
 2. The user marks regions and annotations.
 3. The regions are cropped at physical resolution.
 4. The panel shows the thumbnails immediately, and OCR runs locally in the background.
-5. The user asks a question or clicks a quick action. The panel always states what will be sent.
+5. The user asks a question or clicks a command. The panel always states what will be sent.
 6. The main process attaches the Firebase ID token and POSTs to `/v1/ask`.
 7. The backend verifies the token, reserves quota in a Firestore transaction, validates the images (real file signature, size, count), checks that the model can read images, and streams Gemini's answer back as SSE.
 8. Follow-up questions reuse the same screenshot context.
@@ -56,7 +58,9 @@ flowchart LR
 | Pen, arrow, highlighter, blur (pixelate sensitive data before sending), undo/redo/clear | ✅ |
 | Mask outside circle/lasso shapes (toggle) | ✅ |
 | Local OCR (tesseract.js), shown with confidence and timing | ✅ |
-| Quick actions: Explain, Define, Summarize, Fix error, Translate, Step by step, Example, Compare, Search web | ✅ |
+| Commands: built-in Explain, Define, Summarize, Fix error, Translate, Step by step, Example, Compare, Search web, plus your own; pin up to 4 to the toolbars; each can have its own shortcut | ✅ |
+| Model menu grouped by source with search, image support and measured speed; choose which sources appear | ✅ |
+| Shortcut recorder that checks each combination against other apps; defaults fall back automatically if taken | ✅ |
 | Composer: Enter sends, Shift+Enter adds a new line, empty Enter runs the default action; stop; retry; copy | ✅ |
 | Streaming Markdown answers with code highlighting; web-search sources (Gemini grounding) | ✅ |
 | Follow-up questions reuse the screenshot; "+ Region", "Replace", "New chat" | ✅ |
@@ -67,7 +71,7 @@ flowchart LR
 | Latency: capture, OCR, upload size, first token and total time shown per answer and logged to CSV | ✅ |
 | Local-only mode (nothing is uploaded), privacy notice before every send | ✅ |
 | **Select text in any app → "Ask · Explain · Translate · Define" bar** appears next to it (like a "Reply" popup) | ✅ Windows UI Automation; it never takes focus and hides on the next click elsewhere |
-| **Ctrl+Shift+X with text selected** asks about that text (UI Automation → Ctrl+C with the clipboard restored → existing clipboard) | ✅ Ctrl+C is never sent to terminals |
+| **Alt+Shift+A with text selected** asks about that text (UI Automation → Ctrl+C with the clipboard restored → existing clipboard) | ✅ Ctrl+C is never sent to terminals |
 | Per-region text notes, Windows built-in OCR engine, packaged installer signing | 🕒 Planned |
 
 ## Quick start (local, about 5 minutes)
@@ -88,11 +92,23 @@ npm install
 npm start
 ```
 
-Then press **Ctrl+Shift+Space**. Drag over something, press **Enter**, and type a question (or click a quick action).
+Then press **Alt+Shift+S**. Drag over something, press **Enter**, and type a question (or click a command). Select text in any app and press **Alt+Shift+A**, or use the Ask bar that appears next to it.
+
+## Shortcuts and commands
+
+| Shortcut | Does |
+|---|---|
+| **Alt+Shift+S** | Select a screen region (or several) and ask about it |
+| **Alt+Shift+A** | Ask about the text selected in any app |
+| Your own | Each command can have a shortcut that runs it on the selected text, or on a screen region when nothing is selected |
+
+The defaults use two adjacent keys you can press with one hand. If another app already owns one on your PC, IntelliPointer falls back to an alternative (Ctrl+Alt+S / Ctrl+Alt+A, then the earlier Ctrl+Shift+Space / Ctrl+Shift+X) and shows which one is active. To pick your own, go to **Settings → Shortcuts**, click a shortcut and press the keys. Each combination is checked against other apps before it is saved.
+
+**Commands** are one-click prompts: Explain, Summarize, Translate and the others are built in, and you can add your own in **Settings → Commands** (name, prompt, optional web search and shortcut). Pin up to four to show them in the screen toolbar and the Ask bar. Reorder, edit or delete any of them, or restore the defaults.
 
 ## Choosing models (your own keys, a local server, or the cloud)
 
-Open **Settings → Models**. Each tab is one model source, and you can set up several at once. The model menu in the title bar groups them by source.
+Open **Settings → Models**. It lists every model source with a switch: turn a source off to hide its models from the model menu. Click a source to set it up; you can use several at once. The model menu in the title bar groups models by source, shows which read images and how fast each starts answering, and has a search box.
 
 | Source | What you enter | Notes |
 |---|---|---|
@@ -228,7 +244,7 @@ Each answer shows `capture · OCR · upload size · first token · total`. Every
 cd backend && npm test                        # validation + auth enforcement (13 tests)
 cd desktop && npm test                        # SSE parser
 cd desktop && npx electron test/overlay.e2e.js   # overlay: drawing, move, undo, blur, crops at 1.5x DPI
-cd desktop && npx electron test/bubble.e2e.js    # Ask bar, context card, Models settings (IP_THEME=dark|light for screenshots)
+cd desktop && npx electron test/ui.e2e.js        # panel, model menu, settings tabs, commands, Ask bar (IP_THEME=dark|light, IP_GPU=on for screenshots)
 cd desktop && npx electron test/providers.e2e.js # key encryption, URL rules, local/OpenAI path; live Gemini/Groq if GEMINI_API_KEY / GROQ_API_KEY set
 # with a backend running on :8080:
 cd desktop && npx electron test/panel.e2e.js path\to\image.png   # real OCR + real streamed answer + follow-up
@@ -239,6 +255,6 @@ cd desktop && npx electron test/panel.e2e.js path\to\image.png   # real OCR + re
 - Gemini time to first token varies a lot with provider load: we measured 15–20 s during a high-demand period, and Gemini returned HTTP 503 on the larger model, which the app shows as a retryable error. The lighter model is usually faster.
 - tesseract.js downloads its English model (about 10 MB) on first use, then works offline. It reads clean screen text well. It struggles with handwriting and math, so those rely on the vision model.
 - Region selection works on one monitor at a time per capture. Use **+ Region** to add regions from another monitor.
-- The Ask bar relies on apps exposing their selection through Windows UI Automation. Edge, Chrome, Word, Notepad and most standard apps do. For apps that don't, select the text and press **Ctrl+Shift+X**, which falls back to a Ctrl+C round-trip.
+- The Ask bar relies on apps exposing their selection through Windows UI Automation. Edge, Chrome, Word, Notepad and most standard apps do. For apps that don't, select the text and press **Alt+Shift+A**, which falls back to a Ctrl+C round-trip.
 - The selection helper is a small PowerShell + C# process (`desktop/src/main/native/selection-helper.ps1`) started with `-ExecutionPolicy Bypass` for that one process only. Some antivirus tools may flag a global mouse hook. Turn the bar off in Settings if that's a problem; the hotkey still works.
 - The free Render tier sleeps when idle (see the Render section above).

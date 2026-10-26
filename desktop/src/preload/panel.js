@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('ip', {
   fetchProviderModels: invoke('providers:fetchModels'),
   saveProviders: invoke('providers:save'),
   speedTest: invoke('providers:speedTest'),
+  checkHotkey: invoke('hotkeys:check'),
+  onOpenSettings: (cb) => ipcRenderer.on('panel:open-settings', () => cb()),
   usage: invoke('usage:get'),
   capture: invoke('capture:start'),
   ask: invoke('ask:start'),

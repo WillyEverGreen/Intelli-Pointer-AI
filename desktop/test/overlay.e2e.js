@@ -68,7 +68,7 @@ app.whenReady().then(async () => {
     if (e.level === 'error' || e.level === 3) consoleErrors.push(e.message);
     else console.log('[renderer]', e.level, e.message);
   });
-  await win.loadFile(path.join(__dirname, '..', 'src', 'renderer', 'overlay.html'));
+  await win.loadFile(path.join(__dirname, '..', 'src', 'renderer', 'overlay', 'overlay.html'));
 
   // Simulate a 1.5x-scaled display: physical bitmap is 1.5x the CSS size.
   const scale = 1.5;

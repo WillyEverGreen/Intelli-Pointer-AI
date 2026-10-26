@@ -148,7 +148,7 @@ function listModels() {
   const out = [];
   for (const provider of Object.keys(DEFS)) {
     const configured = provider === 'local' ? Boolean(s.providers.local.baseUrl) : Boolean(secrets.get(provider));
-    if (!configured) continue;
+    if (!configured || s.providers[provider].enabled === false) continue;
     const group = providerLabel(provider);
     for (const m of s.providers[provider].models) {
       out.push({

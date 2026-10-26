@@ -1,0 +1,608 @@
+/* Settings view of the panel (settings-view.js) and its components. */
+
+/* ---------- settings ---------- */
+#settings-view {
+  overflow-y: auto;
+}
+
+.settings-section {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-section h2 {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.field .input, .field .select {
+  width: 100%;
+}
+
+.field .input.narrow {
+  width: 90px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.toggle-row .strong {
+  font-weight: 500;
+}
+
+.account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+#auth-msg:empty {
+  display: none;
+}
+
+#auth-msg {
+  margin: 10px 0 0;
+}
+
+.settings-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.settings-footer .meta {
+  flex: 1;
+}
+
+#quick-actions {
+  mask-image: linear-gradient(to right, #000 88%, transparent);
+}
+
+/* ---------- settings: model sources ---------- */
+.prov-pane > .help:first-child {
+  margin: 0 0 12px;
+}
+
+.key-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.key-row .input {
+  flex: 1;
+}
+
+.key-hint {
+  flex: none;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+.presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -4px 0 12px;
+}
+
+.presets .btn {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.prov-pane [data-role="status"]:empty {
+  display: none;
+}
+
+.prov-pane [data-role="status"].error-text {
+  color: var(--danger);
+}
+
+.model-picker-list {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.model-picker-list .input {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.model-picker-list .input:focus {
+  box-shadow: none;
+}
+
+.model-list {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.model-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+
+.model-row:last-child {
+  border-bottom: 0;
+}
+
+.model-row:hover {
+  background: var(--bg-hover);
+}
+
+.model-use {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.model-use input {
+  flex: none;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.model-id {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.vision-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: transparent;
+  color: var(--text-faint);
+  font: 11px var(--font);
+  cursor: pointer;
+}
+
+.vision-toggle[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--accent-subtle);
+  color: var(--accent-subtle-text);
+}
+
+.model-empty {
+  padding: 10px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.picker-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.picker-tools .input {
+  flex: 1;
+  border-bottom: 0;
+}
+
+.chip {
+  flex: none;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font: 500 11.5px var(--font);
+  cursor: pointer;
+}
+
+.chip:hover {
+  color: var(--text);
+}
+
+.chip[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--accent-subtle);
+  color: var(--accent-subtle-text);
+}
+
+.chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.model-tags {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-active);
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.speed {
+  min-width: 46px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.speed.fast {
+  color: #30a46c;
+}
+
+.speed.ok {
+  color: #c98a12;
+}
+
+.speed.slow {
+  color: var(--danger);
+}
+
+/* ---------- settings layout ---------- */
+#settings-view {
+  overflow: hidden;
+}
+
+.settings-tabs {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.settings-tabs button {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  font: 500 12.5px var(--font);
+  cursor: pointer;
+}
+
+.settings-tabs button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.settings-tabs button[aria-selected="true"] {
+  background: var(--bg);
+  box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(0, 0, 0, 0.06);
+  color: var(--text);
+}
+
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.tab-panel {
+  padding: 14px 16px 20px;
+}
+
+.tab-panel h2 {
+  margin: 18px 0 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tab-panel h2:first-child {
+  margin-top: 0;
+}
+
+.intro {
+  margin: 0 0 14px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.footnote {
+  margin-top: 16px;
+}
+
+/* ---------- Models: source list ---------- */
+.source-list {
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.source-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.source-row:last-child {
+  border-bottom: 0;
+}
+
+.source-row:hover {
+  background: var(--bg-hover);
+}
+
+.source-row[aria-selected="true"] {
+  background: var(--accent-subtle);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.source-row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.source-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.source-text .strong {
+  font-size: 13px;
+}
+
+.prov-pane {
+  padding: 2px 2px 0;
+}
+
+/* ---------- Commands ---------- */
+.command-list {
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.command-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 6px 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.command-row:last-child {
+  border-bottom: 0;
+}
+
+.command-row:hover {
+  background: var(--bg-hover);
+}
+
+.command-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.command-text .strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.command-text .meta {
+  overflow: hidden;
+  font-size: 11.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.command-tools {
+  display: flex;
+  flex: none;
+  gap: 0;
+}
+
+.command-tools .icon-btn[aria-pressed="true"] {
+  background: transparent;
+  color: var(--accent);
+}
+
+/* The command editor opens as a sheet over the settings. */
+.sheet-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.38);
+  animation: fade 0.12s ease-out;
+}
+
+.command-editor {
+  width: 100%;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  box-shadow: var(--shadow-float);
+  animation: rise 0.14s ease-out;
+}
+
+.sheet-title {
+  margin: 0 0 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.input.textarea {
+  height: auto;
+  min-height: 80px;
+  padding: 8px 9px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.error-text {
+  color: var(--danger);
+}
+
+/* ---------- Shortcuts (shortcut-input.js) ---------- */
+.shortcut-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.shortcut-input {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  justify-content: end;
+  gap: 4px;
+}
+
+.shortcut-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 132px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: 12.5px var(--font);
+  cursor: pointer;
+}
+
+.shortcut-button:hover {
+  border-color: var(--text-faint);
+}
+
+.shortcut-button.empty {
+  color: var(--text-faint);
+}
+
+.shortcut-button.recording {
+  border-color: var(--accent);
+  box-shadow: var(--focus);
+  color: var(--accent);
+}
+
+.shortcut-status {
+  grid-column: 1 / -1;
+  min-height: 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  text-align: right;
+}
+
+.shortcut-status:empty {
+  display: none;
+}
+
+.shortcut-status.ok {
+  color: #30a46c;
+}
+
+.shortcut-status.error {
+  color: var(--danger);
+}
+
+.field .shortcut-input {
+  justify-content: start;
+}
+
+.field .shortcut-status {
+  text-align: left;
+}

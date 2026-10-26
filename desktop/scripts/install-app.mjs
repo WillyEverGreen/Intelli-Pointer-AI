@@ -4,6 +4,7 @@
 //   npm run app:install                 test, build, install, relaunch
 //   npm run app:install -- --no-launch  ...without relaunching
 //   npm run app:install -- --skip-tests
+//   npm run app:install -- --skip-screen-tests   skip tests that need an unlocked screen
 //   npm run app:build                   build into desktop/dist only
 //
 // Installs to %LOCALAPPDATA%\Programs\IntelliPointer AI (no admin rights).
@@ -38,15 +39,19 @@ if (!args.has('--skip-tests')) {
   step('Running unit tests');
   execSync('npm test', { cwd: root, stdio: 'inherit' });
   const electronBin = require('electron'); // path to the Electron executable
+  // App-level tests. The screen ones need an unlocked, awake display;
+  // --skip-screen-tests leaves them out (e.g. when installing unattended).
   const appTests = [
-    ['Selected-text shortcut and clipboard handling', 'test/selection.e2e.js'],
-    ['Overlay leaves itself out of screenshots', 'test/capture-exclusion.e2e.js'],
-    ['Screen-region shortcut speed (briefly dims the screen)', 'test/capture.e2e.js'],
-  ];
+    ['Panel, model menu, settings and commands', 'test/ui.e2e.js', false],
+    ['Selection overlay drawing tools', 'test/overlay.e2e.js', false],
+    ['Selected-text shortcut and clipboard handling', 'test/selection.e2e.js', true],
+    ['Overlay leaves itself out of screenshots', 'test/capture-exclusion.e2e.js', true],
+    ['Screen-region shortcut speed (briefly dims the screen)', 'test/capture.e2e.js', true],
+  ].filter(([, , needsScreen]) => !(needsScreen && args.has('--skip-screen-tests')));
   for (const [label, file] of appTests) {
     step(`Testing: ${label}`);
     const r = spawnSync(electronBin, [file], { cwd: root, encoding: 'utf8', timeout: 90000 });
-    const lines = `${r.stdout || ''}`.split(/\r?\n/).filter((l) => /^(PASS|FAIL|\s+round|grab)/.test(l));
+    const lines = `${r.stdout || ''}`.split(/\r?\n/).filter((l) => /^(PASS|FAIL|SKIP|\s+round|grab)/.test(l));
     for (const l of lines) console.log(`  ${l.trim()}`);
     if (r.status !== 0 || !lines.length || lines.some((l) => l.startsWith('FAIL'))) {
       throw new Error(`${label}: test failed; not installing.`);

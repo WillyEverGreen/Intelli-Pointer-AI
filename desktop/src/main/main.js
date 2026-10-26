@@ -21,6 +21,7 @@ for (const event of ['uncaughtException', 'unhandledRejection']) {
   });
 }
 const clip = require('./clipboard');
+const commandDefaults = require('./commands');
 const { makeIcon } = require('./icon');
 
 // Runs an async handler from a hotkey/menu and logs failures instead of dropping them.
@@ -76,7 +77,7 @@ function createPanel() {
       spellcheck: false,
     },
   });
-  panel.loadFile(path.join(__dirname, '..', 'renderer', 'panel.html'));
+  panel.loadFile(path.join(__dirname, '..', 'renderer', 'panel', 'panel.html'));
   panel.on('close', (e) => {
     if (!app.isQuitting) {
       e.preventDefault();
@@ -150,7 +151,7 @@ function createBubble() {
     },
   });
   bubble.setAlwaysOnTop(true, 'pop-up-menu');
-  bubble.loadFile(path.join(__dirname, '..', 'renderer', 'bubble.html'));
+  bubble.loadFile(path.join(__dirname, '..', 'renderer', 'bubble', 'bubble.html'));
   bubble.webContents.on('will-navigate', (e) => e.preventDefault());
 }
 
@@ -183,7 +184,7 @@ function showBubble({ text, x, y }) {
   // Rough box of the selected line, so the panel opens beside it rather than over it.
   bubbleAnchor = { x: Math.round(p.x) - 320, y: Math.round(p.y) - 24, width: 320, height: 48 };
   bubble.setBounds({ x: bx, y: by, width: w, height: h });
-  bubble.webContents.send('bubble:show', { preview: bubbleText.slice(0, 200) });
+  bubble.webContents.send('bubble:show', { preview: bubbleText.slice(0, 200), commands: pinnedCommands() });
   bubble.showInactive();
   armBubbleTimer();
 }
@@ -208,9 +209,11 @@ function openWithText(text, { action = null, kind = 'selection', bbox = null } =
 // the clipboard, then whatever is already on the clipboard.
 // Last resort: the text most recently selected with the mouse (seen by the
 // helper's hook), for apps that expose neither UIA selection nor Ctrl+C.
-async function askAboutSelection() {
+// With `commandId` (a command's own shortcut) the command runs straight away
+// on the selection, or, if no text is selected, on a screen region instead.
+async function askAboutSelection({ commandId = null } = {}) {
   const t0 = performance.now();
-  log('hotkey.pressed', { hotkey: 'selection', helperReady: selection.isAvailable() });
+  log('hotkey.pressed', { hotkey: commandId ? `command:${commandId}` : 'selection', helperReady: selection.isAvailable() });
   hideBubble();
   const auto = await selection.readViaAutomation();
   let text = auto.text;
@@ -229,7 +232,8 @@ async function askAboutSelection() {
     ms: Math.round(performance.now() - t0), source: text ? source : 'none', chars: text.length,
     automationMs: auto.ms, automationTimedOut: auto.timedOut, copySkipped: copy?.skipped, copyTimedOut: copy?.timedOut,
   });
-  if (text) return openWithText(text, { kind: 'selection' });
+  if (text) return openWithText(text, { kind: 'selection', action: commandId });
+  if (commandId) return startCapture('replace', commandId);
   return askAboutClipboard({ fromHotkey: true });
 }
 
@@ -270,7 +274,8 @@ async function runOcr(regions) {
   return { text: parts.join('\n\n'), confidence: Math.round(confSum / regions.length), ms: Math.round(performance.now() - t0) };
 }
 
-async function startCapture(mode = 'replace') {
+// `presetAction`: a command to run on confirm (from a command's shortcut).
+async function startCapture(mode = 'replace', presetAction = null) {
   if (capture.isActive()) return;
   log('hotkey.pressed', { hotkey: 'capture', mode });
   // Load OCR while the user is still selecting, so it is ready by confirm.
@@ -282,7 +287,7 @@ async function startCapture(mode = 'replace') {
 
   let result;
   try {
-    result = await capture.startSelection();
+    result = await capture.startSelection({ commands: pinnedCommands(), presetAction });
   } catch (err) {
     log('capture.error', { error: err.message });
     new Notification({ title: 'IntelliPointer', body: err.message }).show();
@@ -310,7 +315,7 @@ async function startCapture(mode = 'replace') {
   const attachments = regions.map((r, i) => ({ label: `Region ${i + 1}`, width: r.width, height: r.height, ...toAttachment(r.png) }));
   const contextId = `ctx-${Date.now()}`;
   panel.webContents.send('context:add', {
-    contextId, mode, kind: 'screen', images: attachments, action: result.action || null,
+    contextId, mode, kind: 'screen', images: attachments, action: result.action || presetAction || null,
     timings: { captureMs: result.captureMs, selectionMs },
   });
   showPanel({ focus: !result.action, bbox });
@@ -340,44 +345,93 @@ async function askAboutClipboard({ fromHotkey = false } = {}) {
 
 // ---------- hotkeys & tray ----------
 
-// Shortcuts another app already owns; shown in the panel until fixed.
+const prettyAccelerator = (a) => String(a || '').replace(/CommandOrControl|CmdOrCtrl/g, 'Ctrl');
+const pinnedCommands = () => settings.get().commands.filter((c) => c.pinned).map(({ id, name }) => ({ id, name }));
+
+// Shortcuts that could not be registered (another app owns them), and the
+// ones actually in use (a default may have fallen back to an alternative).
 let hotkeyErrors = [];
+let activeHotkeys = {};
 
 function registerHotkeys() {
   globalShortcut.unregisterAll();
   const s = settings.get();
   const failed = [];
+  activeHotkeys = {};
   const tryRegister = (accelerator, fn) => {
-    let ok = false;
+    if (!accelerator) return false;
     try {
-      ok = globalShortcut.register(accelerator, fn);
+      return globalShortcut.register(accelerator, fn);
     } catch (err) {
       log('hotkey.invalid', { accelerator, error: err.message });
+      return false;
     }
-    if (!ok) failed.push(accelerator);
   };
-  tryRegister(s.captureHotkey, guarded('capture', () => startCapture('replace')));
-  tryRegister(s.clipboardHotkey, guarded('selection', askAboutSelection));
-  hotkeyErrors = failed;
-  log('hotkeys.registered', { capture: s.captureHotkey, selection: s.clipboardHotkey, failed });
-  return failed;
+  const core = {
+    captureHotkey: guarded('capture', () => startCapture('replace')),
+    selectionHotkey: guarded('selection', () => askAboutSelection()),
+  };
+  for (const [key, fn] of Object.entries(core)) {
+    // A default shortcut that is taken falls back to the next free one;
+    // one the user picked is reported instead of silently replaced.
+    const isDefault = s[key] === settings.DEFAULTS[key];
+    const candidates = isDefault ? settings.HOTKEY_FALLBACKS[key] : [s[key]];
+    const used = candidates.find((acc) => tryRegister(acc, fn));
+    if (used) activeHotkeys[key] = used;
+    else failed.push(s[key]);
+  }
+  for (const c of s.commands) {
+    if (!c.shortcut) continue;
+    if (tryRegister(c.shortcut, guarded(`command:${c.id}`, () => askAboutSelection({ commandId: c.id })))) activeHotkeys[`command:${c.id}`] = c.shortcut;
+    else failed.push(c.shortcut);
+  }
+  hotkeyErrors = failed.map(prettyAccelerator);
+  log('hotkeys.registered', { active: activeHotkeys, failed });
+  updateTrayMenu();
+  return hotkeyErrors;
+}
+
+// Whether a shortcut can be used: valid, not used by another command here,
+// and not owned by another app. `forKey` is the setting being edited.
+function checkHotkey(accelerator, forKey) {
+  const acc = String(accelerator || '');
+  if (!acc) return { ok: true };
+  const mine = Object.entries(activeHotkeys).find(([k, a]) => a.toLowerCase() === acc.toLowerCase());
+  if (mine) {
+    if (mine[0] === forKey) return { ok: true };
+    const what = mine[0] === 'captureHotkey' ? 'Select a screen region'
+      : mine[0] === 'selectionHotkey' ? 'Ask about selected text'
+        : `the “${settings.get().commands.find((c) => `command:${c.id}` === mine[0])?.name}” command`;
+    return { ok: false, reason: `Already used here for ${what}.` };
+  }
+  try {
+    if (!globalShortcut.register(acc, () => {})) return { ok: false, reason: 'Another app already uses this shortcut.' };
+    globalShortcut.unregister(acc);
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: 'Not a valid shortcut.' };
+  }
 }
 
 function createTray() {
   tray = new Tray(makeIcon(32));
-  tray.setToolTip('IntelliPointer AI');
-  const s = settings.get();
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: `Capture screen region   (${s.captureHotkey})`, click: () => startCapture('replace') },
-    { label: `Ask about selected text: select it, press ${s.clipboardHotkey}`, enabled: false },
-    { label: 'Ask about clipboard', click: guarded('clipboard', () => askAboutClipboard()) },
-    { label: 'Show panel', click: () => showPanel({ focus: true }) },
-    { type: 'separator' },
-    { label: 'Open latency log', click: () => shell.showItemInFolder(latency.file()) },
-    { type: 'separator' },
-    { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } },
-  ]));
+  tray.setToolTip('IntelliPointer');
   tray.on('click', () => showPanel({ focus: true }));
+  updateTrayMenu();
+}
+
+function updateTrayMenu() {
+  if (!tray) return;
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Select a screen region', accelerator: activeHotkeys.captureHotkey, click: guarded('capture', () => startCapture('replace')) },
+    { label: 'Ask about clipboard', click: guarded('clipboard', () => askAboutClipboard()) },
+    { label: 'Open IntelliPointer', click: () => showPanel({ focus: true }) },
+    { type: 'separator' },
+    { label: 'Settings', click: () => { showPanel({ focus: true }); panel.webContents.send('panel:open-settings'); } },
+    { label: 'Open diagnostics log', click: () => shell.showItemInFolder(logFile()) },
+    { type: 'separator' },
+    { label: 'Quit IntelliPointer', click: () => { app.isQuitting = true; app.quit(); } },
+  ]));
 }
 
 // Written by scripts/install-app.mjs; absent when running from source.
@@ -418,8 +472,22 @@ function registerIpc() {
   ipcMain.on('bubble:hover', (e, inside) => {
     if (fromBubble(e)) bubbleHover = Boolean(inside);
   });
+  // The bar sizes itself to its buttons; keep it inside the screen.
+  ipcMain.on('bubble:resize', (e, width, height) => {
+    if (!fromBubble(e)) return;
+    const w = Math.min(720, Math.max(120, Math.round(Number(width) || 0)));
+    const h = Math.min(80, Math.max(36, Math.round(Number(height) || 0)));
+    const b = bubble.getBounds();
+    const wa = screen.getDisplayMatching(b).workArea;
+    bubble.setBounds({ x: Math.min(b.x, wa.x + wa.width - w), y: b.y, width: w, height: h });
+  });
 
-  handlePanel('settings:get', () => ({ ...settings.get(), latencyFile: latency.file(), build: buildInfo(), hotkeyErrors }));
+  handlePanel('settings:get', () => ({
+    ...settings.get(), latencyFile: latency.file(), build: buildInfo(), hotkeyErrors, activeHotkeys,
+    defaultCommands: commandDefaults.DEFAULT_COMMANDS,
+    defaults: { captureHotkey: settings.DEFAULTS.captureHotkey, selectionHotkey: settings.DEFAULTS.selectionHotkey },
+  }));
+  handlePanel('hotkeys:check', (_e, accelerator, forKey) => checkHotkey(accelerator, String(forKey || '')));
   handlePanel('open:diagnostics', () => shell.showItemInFolder(logFile()));
   handlePanel('settings:update', (_e, patch) => {
     const next = settings.update(patch);

@@ -31,7 +31,12 @@ app.whenReady().then(async () => {
   const { clipboard, ClipboardItem } = require('electron');
   const clip = require('../src/main/clipboard');
   const usersClipboard = await clip.snapshot();
-  try {
+  // If another program is holding the Windows clipboard open, nothing can be
+  // tested here; say so instead of reporting false failures.
+  await clipboard.writeText('intellipointer-probe').catch(() => {});
+  const clipboardWorks = (await clipboard.readText().catch(() => '')) === 'intellipointer-probe';
+  if (!clipboardWorks) console.log('SKIP clipboard checks: the Windows clipboard is locked by another program right now');
+  if (clipboardWorks) try {
     // Copy fallback skipped (fake reports a console window): clipboard must be restored.
     await clipboard.writeText('user clipboard contents');
     const c = await selection.readViaCopy();

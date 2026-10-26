@@ -4,20 +4,17 @@
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self';" />
   <title>Ask</title>
-  <link rel="stylesheet" href="theme.css" />
+  <link rel="stylesheet" href="../shared/theme.css" />
   <link rel="stylesheet" href="bubble.css" />
 </head>
 <body>
   <div id="bar" role="toolbar" aria-label="Ask about the selected text">
     <button id="ask" class="btn ghost ask" title="Ask a question about this text"><span class="logo" aria-hidden="true"></span>Ask</button>
     <span class="sep"></span>
-    <button class="btn ghost" data-action="explain">Explain</button>
-    <button class="btn ghost" data-action="translate">Translate</button>
-    <button class="btn ghost" data-action="define">Define</button>
-    <span class="sep"></span>
+    <span id="commands"></span>
     <button id="close" class="icon-btn" data-icon="x" title="Dismiss"></button>
   </div>
-  <script src="icons.js"></script>
+  <script src="../shared/icons.js"></script>
   <script src="bubble.js"></script>
 </body>
 </html>
