@@ -82,7 +82,7 @@
       const why = errors.length ? errors.map((e) => `${e.source}: ${e.message}`).join(' ') : 'Add a Gemini or Groq key, or a local server, to choose models.';
       banner(why, { label: 'Settings', onClick: openSettings });
     } else if (errors.length) {
-      // One source failing (e.g. signed out of IntelliPointer Cloud) must not be silent.
+      // One source failing (e.g. a local server that is not running) must not be silent.
       banner(errors.map((e) => `${e.source}: ${e.message}`).join(' '), { label: 'Settings', onClick: openSettings });
     } else {
       banner('');
@@ -178,7 +178,7 @@
     if (context?.clipText) parts.push(context.kind === 'selection' ? 'selected text' : 'clipboard text');
     const provider = m ? m.label.split(' · ')[0] : 'the model provider';
     const what = parts.length ? `${parts.join(', ')} and your question` : 'your question';
-    const route = !m ? '' : m.local ? ' (your local server)' : m.direct ? ' directly' : ' through IntelliPointer Cloud';
+    const route = !m ? '' : m.local ? ' (your local server)' : ' directly';
     let note = `Sends ${what} to ${provider}${route}.`;
     if (context?.images.length && m && !m.vision) note += ' This model is text-only, so images are not sent.';
     const short = parts.length ? `Sends ${parts.join(', ')}` : `Sends to ${provider}`;

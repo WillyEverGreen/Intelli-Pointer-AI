@@ -4,7 +4,7 @@
 //   2 captured  the panel with the crop, local OCR and quick actions
 //   3 answer    the streamed AI answer next to the original screen
 //   4 settings  model sources (Cloud / 9Router / Gemini / Groq)
-// Needs a backend on http://127.0.0.1:8080 (AUTH_DISABLED=true for local dev).
+// Needs a Gemini key for the answer: set GEMINI_API_KEY in the environment.
 // Run: npx electron scripts/screenshots.js [outDir]
 const path = require('node:path');
 const fs = require('node:fs');
@@ -33,10 +33,13 @@ app.on('window-all-closed', () => {}); // windows come and go between shots
 app.whenReady().then(async () => {
   fs.mkdirSync(outDir, { recursive: true });
   const settings = require('../src/main/settings');
-  const auth = require('../src/main/auth');
+  const secrets = require('../src/main/secrets');
   const api = require('../src/main/api');
   const ocr = require('../src/main/ocr');
-  settings.update({ providers: { cloud: { enabled: true } } });
+  if (!process.env.GEMINI_API_KEY) throw new Error('Set GEMINI_API_KEY to generate the answer screenshot.');
+  await secrets.load();
+  await secrets.set('gemini', process.env.GEMINI_API_KEY);
+  settings.update({ providers: { gemini: { enabled: true, models: [{ id: 'gemini-flash-latest', vision: true }] } } });
 
   // ----- the stand-in desktop -----
   const screen = new BrowserWindow({ width: W, height: H, useContentSize: true, show: true, frame: false, alwaysOnTop: true, webPreferences: { backgroundThrottling: false } });
@@ -74,18 +77,15 @@ app.whenReady().then(async () => {
   const h = (ch, fn) => ipcMain.handle(ch, (_e, ...a) => fn(_e, ...a));
   h('settings:get', () => settings.get());
   h('settings:update', (_e, p) => ({ settings: settings.update(p), hotkeyErrors: [] }));
-  h('auth:status', () => auth.status());
   h('models:list', () => api.listModels());
-  h('usage:get', () => api.usage());
   h('ask:cancel', (_e, id) => api.cancel(id));
   h('ask:start', async (e, { reqId, body, cacheable }) => {
     const r = await api.ask({ reqId, body, cacheable }, (event, data) => e.sender.send('ask:event', { reqId, event, data }));
     return { outcome: r.outcome };
   });
-  const secrets = require('../src/main/secrets');
   h('providers:status', () => ({ providers: settings.get().providers, keys: secrets.status() }));
   h('hotkeys:check', () => ({ ok: true }));
-  for (const ch of ['clipboard:write', 'panel:pin', 'panel:resize', 'panel:hide', 'open:latencyLog', 'open:diagnostics', 'capture:start', 'auth:signIn', 'auth:signOut']) h(ch, () => true);
+  for (const ch of ['clipboard:write', 'panel:pin', 'panel:resize', 'panel:hide', 'open:latencyLog', 'open:diagnostics', 'capture:start']) h(ch, () => true);
   await panel.loadFile(path.join(__dirname, '..', 'src', 'renderer', 'panel', 'panel.html'));
   await wait(1800);
   const pjs = (code) => panel.webContents.executeJavaScript(code);
@@ -97,6 +97,15 @@ app.whenReady().then(async () => {
   await wait(300);
   if (!(await pjs(`document.getElementById('model-menu').hidden`))) await pjs(`document.getElementById('model-button').click()`);
   await wait(200);
+
+  // ----- 4. model sources in Settings (taken now: the panel is empty and idle) -----
+  await pjs(`document.getElementById('btn-settings').click()`);
+  await pjs(`document.querySelectorAll('[data-role="hint"]').forEach((el) => { el.style.visibility = 'hidden'; })`); // never publish the tail of a real key
+  await wait(900);
+  fs.writeFileSync(path.join(outDir, '4-settings-models.png'), (await panel.webContents.capturePage()).toPNG());
+  console.log('4-settings-models.png');
+  await pjs(`document.getElementById('btn-back').click()`);
+  await wait(300);
 
   // ----- 2. captured region + local OCR -----
   const k = sw / W; // the display scale: the bitmap is larger than the CSS layout
@@ -117,6 +126,7 @@ app.whenReady().then(async () => {
 
   // ----- 3. streamed answer, shown beside the original screen -----
   await pjs(`[...document.querySelectorAll('#quick-actions button')].find((b) => b.textContent === 'Fix error').click()`);
+  try {
   let done = false;
   for (let i = 0; i < 90 && !done; i++) {
     await wait(1000);
@@ -138,14 +148,10 @@ app.whenReady().then(async () => {
   fs.writeFileSync(path.join(outDir, '3-ai-answer.png'), (await comp.webContents.capturePage()).toPNG());
   comp.destroy();
   console.log('3-ai-answer.png');
-
-  // ----- 4. model sources in Settings -----
-  await pjs(`document.getElementById('btn-settings').click()`);
-  await wait(900);
-  await pjs(`[...document.querySelectorAll('.source-row')].pop().click()`);
-  await wait(500);
-  fs.writeFileSync(path.join(outDir, '4-settings-models.png'), (await panel.webContents.capturePage()).toPNG());
-  console.log('4-settings-models.png');
+  } catch (err) {
+    // A busy model must not lose the other shots; the previous answer image is kept.
+    console.warn(`3-ai-answer.png skipped: ${err.message}`);
+  }
 
   await ocr.shutdown();
   app.exit(0);

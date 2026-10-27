@@ -6,164 +6,51 @@
 
 <p align="center">
   <b>Mark anything on your screen, ask an AI about it, get a streamed answer.</b><br>
-  A Windows desktop assistant backed by a secure cloud API (Firebase + Node.js + Gemini).
+  A lightweight Windows assistant with local OCR, your own API keys, and automatic updates.
 </p>
 
 <p align="center">
+  <a href="https://github.com/WillyEverGreen/Intelli-Pointer-AI/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/WillyEverGreen/Intelli-Pointer-AI?label=download&color=2f6fed"></a>
   <a href="https://github.com/WillyEverGreen/Intelli-Pointer-AI/actions"><img alt="CI" src="https://github.com/WillyEverGreen/Intelli-Pointer-AI/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue">
-  <img alt="Node 22" src="https://img.shields.io/badge/node-%E2%89%A522-339933">
-  <img alt="Electron" src="https://img.shields.io/badge/desktop-Electron-47848f">
-  <img alt="Firebase" src="https://img.shields.io/badge/cloud-Firebase%20%2B%20Render-ffca28">
+  <img alt="Windows 10/11" src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4">
 </p>
 
 ---
 
-## Overview
+## Download
+
+**[Download the latest installer](https://github.com/WillyEverGreen/Intelli-Pointer-AI/releases/latest)** (`IntelliPointer-AI-Setup-x.y.z.exe`) and run it. It installs for your user only, with no admin rights, and adds Desktop and Start-menu shortcuts.
+
+**Updates are automatic.** The installed app checks GitHub Releases shortly after it starts and every few hours. A newer version downloads in the background and installs when you quit the app, or right away from the tray menu (**Restart to update**). You never need to download the installer again. Settings → General → Updates has a **Check for updates** button and a switch to turn automatic updates off.
+
+> The installer is not code-signed, so Windows SmartScreen may show "Windows protected your PC" the first time. Choose **More info → Run anyway**.
+
+## What it does
 
 You never have to take a screenshot, open a chatbot, paste and re-explain. Press a shortcut, the screen freezes, you mark one or more regions, local OCR reads them, and a floating panel streams the answer.
-
-**Cloud Computing Lab mini-project** · Department of Computer Engineering · Fr. Conceicao Rodrigues College of Engineering, Mumbai · Academic year 2026-2027
-
-| | |
-|---|---|
-| **Guide** | Dr. Vijay Shelke |
-| **Team** | Ahamed Wafiq (10705) · Sai Balkawade (10707) · C. Jace Jaison (10711) |
-| **Report** | [PDF (LaTeX)](docs/IntelliPointer-Report-LaTeX.pdf) · [PDF (simple)](docs/IntelliPointer-Report.pdf) · [source](docs/REPORT.md) |
-
-## Screenshots: one use case, start to finish
-
-A student runs a Python script and gets a `TypeError`. Instead of copying the error into a chatbot, they press the shortcut.
 
 | 1. Mark the problem | 2. Local OCR reads it |
 | :---: | :---: |
 | <img src="docs/screenshots/1-select-region.png" alt="Frozen screen with the error traceback marked"> | <img src="docs/screenshots/2-captured-and-ocr.png" width="300" alt="Panel showing the captured region and OCR result"> |
-| The screen freezes instantly. The traceback is marked with the rectangle tool (ellipse, lasso, pen, arrow and blur are also there). | The crop is read on this PC. The panel states exactly what will be sent: 1 image and the OCR text. |
+| The screen freezes instantly. Mark a region with the rectangle, ellipse or lasso tool, and add arrows, pen, highlight or blur. | The crop is read on your PC. Before sending, the panel states exactly what will leave it: the image and the OCR text. |
 
-| 3. Streamed answer | 4. Models and cloud sign-in |
+| 3. Streamed answer | 4. Your models, your keys |
 | :---: | :---: |
-| <img src="docs/screenshots/3-ai-answer.png" alt="AI answer streaming next to the original screen"> | <img src="docs/screenshots/4-settings-models.png" width="300" alt="Settings with the IntelliPointer Cloud source"> |
-| "Fix error" returns the cause and corrected code beside the original screen. This answer came from the Gemini Flash model through the backend. | Pick a model source: your own Gemini or Groq key, a local server, or the IntelliPointer Cloud (Firebase sign-in, daily quota). |
+| <img src="docs/screenshots/3-ai-answer.png" alt="AI answer streaming next to the original screen"> | <img src="docs/screenshots/4-settings-models.png" width="300" alt="Settings with the model sources"> |
+| "Fix error" returns the cause and corrected code beside the original screen. | Use Gemini or Groq with your own key, or any OpenAI-compatible server such as 9Router, Ollama or LM Studio. |
 
-The images are generated from the real UI by `desktop/scripts/screenshots.js` against a running backend (`cd desktop && npx electron scripts/screenshots.js`). The "screen" is a stand-in editor window, so no personal desktop is shown.
+## Features
 
-## Cloud services used
-
-| Service | Role |
-|---|---|
-| **Firebase Authentication** | Email/password sign-up and login; issues the 1-hour ID token the API verifies (with revocation checks) |
-| **Cloud Firestore** | Per-user, per-day usage counters only (`usage/{uid}_{day}`); security rules deny every direct client access |
-| **Google Gemini API** | Vision + streaming + web-search grounding; automatic fallback between models on rate limits |
-| **Render** (or Google Cloud Run) | Hosts the Node.js/Express API; secrets live in the host's environment, never in the app or the repo |
-
-## Repository layout
-
-```
-.
-├── backend/            Node.js + Express API (auth, quotas, validation, providers, SSE)
-│   ├── src/            server, auth, quota, validate, firebase, providers/
-│   ├── test/           unit tests + integration tests on the real Firebase emulators
-│   └── scripts/        verify-deployment, check-env, service-account-to-env
-├── desktop/            Electron app (overlay, panel, OCR, native selection helper)
-│   ├── src/            main/, renderer/, preload/
-│   ├── test/           unit and Electron end-to-end tests
-│   └── scripts/        installer, icon and helper builds
-├── firebase/           Firestore security rules (deny all clients)
-├── docs/               Report (LaTeX + PDF), security, deployment, diagrams, evidence
-├── .github/workflows/  CI: tests, emulator tests, audit, container build
-├── render.yaml         One-click Render blueprint
-└── Update IntelliPointer.cmd   Build, test and install the Windows app
-```
-
-> **Documentation:** [Deployment guide](docs/DEPLOYMENT.md) · [Security design and threat model](docs/SECURITY.md) · [Experiments register](docs/EXPERIMENTS.md) · [Deployment evidence](docs/evidence) · [Architecture diagram](docs/architecture.png)
->
-> Developer guide for the desktop app (code layout, extending, performance budget): [`desktop/README.md`](desktop/README.md).
-
-## Architecture
-
-```mermaid
-flowchart LR
-  subgraph PC["Windows PC — IntelliPointer desktop (Electron)"]
-    HK["Global shortcut<br/>Alt+Shift+S"] --> CAP["Native helper BitBlt<br/>(all monitors, physical px)"]
-    CAP --> OV["Selection overlay<br/>rect · square · ellipse · lasso<br/>pen · arrow · highlight · blur"]
-    OV --> OCR["Local OCR<br/>tesseract.js (WASM)"]
-    OV --> PANEL["Floating panel<br/>composer · stream · follow-ups"]
-    OCR --> PANEL
-    MAIN["Main process<br/>API client · token store (DPAPI)"]
-    PANEL <-->|IPC| MAIN
-  end
-
-  MAIN -->|"Email + password (HTTPS)"| FA["Firebase Authentication"]
-  FA -->|"ID token (1 h) + refresh token"| MAIN
-  MAIN -->|"HTTPS + Bearer ID token<br/>POST /v1/ask (JSON)"| API
-
-  subgraph CLOUD["Cloud backend — Render (or Cloud Run)"]
-    API["Express API<br/>helmet · rate limit · validation"]
-    API -->|verifyIdToken| FA
-    API -->|"quota transaction"| FS[("Firestore<br/>usage/{uid}_{day}")]
-    API -->|"API key from env secret"| GEM["Google Gemini API<br/>(vision + streaming + search)"]
-    API -.->|optional| OAI["OpenAI-compatible<br/>(9Router, OpenRouter …)"]
-  end
-
-  GEM -->|SSE tokens| API -->|"SSE: meta · delta · sources · done"| MAIN
-```
-
-**Request lifecycle:**
-1. The hotkey triggers a capture of every monitor *before* the overlay appears, so the overlay never ends up in the image.
-2. The user marks regions and annotations.
-3. The regions are cropped at physical resolution.
-4. The panel shows the thumbnails immediately, and OCR runs locally in the background.
-5. The user asks a question or clicks a command. The panel always states what will be sent.
-6. The main process attaches the Firebase ID token and POSTs to `/v1/ask`.
-7. The backend verifies the token, reserves quota in a Firestore transaction, validates the images (real file signature, size, count), checks that the model can read images, and streams Gemini's answer back as SSE.
-8. Follow-up questions reuse the same screenshot context.
-
-## What works today
-
-| Area | Status |
-|---|---|
-| Global hotkeys (capture, ask-about-clipboard), tray icon | ✅ |
-| Multi-monitor capture, mixed Windows display scaling (crops are taken in physical pixels) | ✅ |
-| Rectangle, square (S or Shift), ellipse/circle, freehand lasso | ✅ |
-| Move / resize regions, multiple numbered regions per question | ✅ |
-| Pen, arrow, highlighter, blur (pixelate sensitive data before sending), undo/redo/clear | ✅ |
-| Mask outside circle/lasso shapes (toggle) | ✅ |
-| Local OCR (tesseract.js), shown with confidence and timing | ✅ |
-| Commands: built-in Explain, Define, Summarize, Fix error, Translate, Step by step, Example, Compare, Search web, plus your own; pin up to 4 to the toolbars; each can have its own shortcut | ✅ |
-| Model menu grouped by source with search, image support and measured speed; choose which sources appear | ✅ |
-| Shortcut recorder that checks each combination against other apps; defaults fall back automatically if taken | ✅ |
-| Composer: Enter sends, Shift+Enter adds a new line, empty Enter runs the default action; stop; retry; copy | ✅ |
-| Streaming Markdown answers with code highlighting; web-search sources (Gemini grounding) | ✅ |
-| Follow-up questions reuse the screenshot; "+ Region", "Replace", "New chat" | ✅ |
-| Pin/unpin on top, collapse/expand, resize, drag; the panel opens beside the selection, not over it | ✅ |
-| Firebase email/password login; refresh token encrypted with Windows DPAPI | ✅ |
-| Cloud API: token verification, Firestore quotas, per-user rate limit, image validation, SSE | ✅ |
-| Provider abstraction: Gemini + any OpenAI-compatible endpoint, with per-model vision checks | ✅ |
-| Latency: capture, OCR, upload size, first token and total time shown per answer and logged to CSV | ✅ |
-| Local-only mode (nothing is uploaded), privacy notice before every send | ✅ |
-| **Select text in any app → "Ask · Explain · Translate · Define" bar** appears next to it (like a "Reply" popup) | ✅ Windows UI Automation; it never takes focus and hides on the next click elsewhere |
-| **Alt+Shift+A with text selected** asks about that text (UI Automation → Ctrl+C with the clipboard restored → existing clipboard) | ✅ Ctrl+C is never sent to terminals |
-| Per-region text notes, Windows built-in OCR engine, packaged installer signing | 🕒 Planned |
-
-## Quick start (local, about 5 minutes)
-
-Requires Node.js 20 or newer on Windows 10/11.
-
-```bash
-# 1) Backend
-cd backend
-npm install
-cp .env.example .env        # then set GEMINI_API_KEY (free from https://aistudio.google.com/apikey)
-# For a first local run without Firebase, also set AUTH_DISABLED=true in .env (localhost only)
-npm run dev                  # http://127.0.0.1:8080/healthz
-
-# 2) Desktop app (second terminal)
-cd desktop
-npm install
-npm start
-```
-
-Then press **Alt+Shift+S**. Drag over something, press **Enter**, and type a question (or click a command). Select text in any app and press **Alt+Shift+A**, or use the Ask bar that appears next to it.
+- **Instant screen capture:** the overlay appears at once and the screenshot is swapped in behind it. Correct under any display scaling and on multiple monitors.
+- **Selection tools:** rectangle, square, ellipse, lasso, pen, arrow, highlight and blur; several regions per question; undo and redo.
+- **Ask about selected text:** select text in any app and press a shortcut, or click the Ask bar that appears next to the selection.
+- **Local OCR:** text is extracted on your PC, so text-only models can answer questions about screenshots.
+- **Commands:** Explain, Summarize, Translate, Define, Fix error, Step by step and your own, each with an optional shortcut.
+- **Follow-up questions** reuse the same screenshot, and answers stream in with Markdown and code highlighting.
+- **Private by design:** nothing is stored. A notice before every send names what will be sent, and local-only mode blocks all uploads.
+- **Light on resources:** about 450 MB across its processes at idle and under 1% CPU, with a compiled native helper instead of a PowerShell host.
+- **Updates itself** from GitHub Releases.
 
 ## Shortcuts and commands
 
@@ -173,164 +60,66 @@ Then press **Alt+Shift+S**. Drag over something, press **Enter**, and type a que
 | **Alt+Shift+A** | Ask about the text selected in any app |
 | Your own | Each command can have a shortcut that runs it on the selected text, or on a screen region when nothing is selected |
 
-The defaults use two adjacent keys you can press with one hand. If another app already owns one on your PC, IntelliPointer falls back to an alternative (Ctrl+Alt+S / Ctrl+Alt+A, then the earlier Ctrl+Shift+Space / Ctrl+Shift+X) and shows which one is active. To pick your own, go to **Settings → Shortcuts**, click a shortcut and press the keys. Each combination is checked against other apps before it is saved.
+If another app already owns a default shortcut, IntelliPointer falls back to an alternative (Ctrl+Alt+S / Ctrl+Alt+A, then Ctrl+Shift+Space / Ctrl+Shift+X) and shows which is active. To pick your own, open **Settings → Shortcuts**, click a shortcut and press the keys. Each combination is checked against other apps before it is saved. The chat window hides when you press any shortcut and comes back with the result.
 
-**Commands** are one-click prompts: Explain, Summarize, Translate and the others are built in, and you can add your own in **Settings → Commands** (name, prompt, optional web search and shortcut). Pin up to four to show them in the screen toolbar and the Ask bar. Reorder, edit or delete any of them, or restore the defaults.
+**Commands** are one-click prompts. Add your own in **Settings → Commands** (name, prompt, optional web search and shortcut) and pin up to four to the screen toolbar and the Ask bar.
 
-## Choosing models (your own keys, a local server, or the cloud)
+## Choosing models
 
-Open **Settings → Models**. It lists every model source with a switch: turn a source off to hide its models from the model menu. Click a source to set it up; you can use several at once. The model menu in the title bar groups models by source, shows which read images and how fast each starts answering, and has a search box.
+Open **Settings → Models**. Every source has a switch; turn one off to hide its models. Click a source to set it up, and click **Load models** to pick the models you want.
 
 | Source | What you enter | Notes |
 |---|---|---|
-| **Gemini** | API key from aistudio.google.com/apikey | Calls Google directly. All Gemini models read images, and web search is supported. |
-| **Groq** | API key from console.groq.com/keys | Calls Groq directly. Llama 4 models read images. |
-| **Local server** | URL of any OpenAI-compatible server. Presets for **9Router** (`:20128/v1`), **Ollama** (`:11434/v1`) and **LM Studio** (`:1234/v1`), plus an optional key | Plain HTTP is allowed only for this PC or your local network (`10.x`, `192.168.x`, `172.16–31.x`, `*.local`). |
-| **Cloud** | Backend URL, Firebase key, sign-in | Your deployed IntelliPointer API, with quotas and server-held keys. |
+| **Gemini** | API key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | Calls Google directly. All Gemini models read images, and web search is supported. |
+| **Groq** | API key from [console.groq.com/keys](https://console.groq.com/keys) | Calls Groq directly. Llama 4 models read images. |
+| **Local server** | URL of any OpenAI-compatible server. Presets for **9Router** (`:20128/v1`), **Ollama** (`:11434/v1`) and **LM Studio** (`:1234/v1`), plus an optional key | Plain HTTP is allowed only for this PC or your local network. |
 
-To set up a source, click **Load models**. Tick the models you want in the menu (a few sensible ones are pre-selected), and use the **Images** toggle to say whether a model can read screen captures. Image support is guessed from the model name, so correct it if the guess is wrong. Text-only models get OCR text instead of images.
+Image support is guessed from the model name and can be corrected with the **Images** toggle; text-only models get OCR text instead. **Local-only mode** (Settings → General) restricts the app to your local server so nothing leaves your network.
 
-**Key safety:**
-- Provider keys are encrypted with Windows DPAPI (`%APPDATA%\IntelliPointer AI\provider-keys.bin`).
-- They are used only by the app's main process. The UI only ever sees the last four characters.
-- Direct providers are called from your PC, so the cloud backend never sees those keys.
+## Privacy and security
 
-**Local-only mode** restricts the app to local-server models, so nothing leaves your network.
+- **Keys:** provider keys are encrypted with Windows DPAPI under `%APPDATA%\IntelliPointer AI`. Only the app's main process can read them; the UI sees at most the last four characters.
+- **Data:** screenshots and conversations stay in memory and are never written to disk. Logs contain only ids, counts and timings, never prompts, OCR text or images.
+- **Direct connections:** requests go from your PC straight to the provider you chose. There is no IntelliPointer server in between.
+- **Selected text** is read only on your PC, only after a drag or double-click. Password fields are skipped, and nothing is sent until you click an action.
+- **Windows:** the UI runs sandboxed with context isolation and a strict CSP, has no browser permissions, can't navigate away, and opens only `https:` links externally. The chat window and Ask bar are excluded from screen capture.
+- **Updates:** downloaded from this repository's GitHub Releases and verified against the SHA-512 checksum in `latest.yml`.
 
-## Install as a Windows app (and update it after changes)
+Found a vulnerability? Please open a private security advisory on GitHub instead of a public issue.
+
+## Troubleshooting
+
+| Problem | What to try |
+|---|---|
+| A shortcut does nothing | Another app owns it. Settings → Shortcuts shows which shortcut is active; pick another. |
+| No models in the model menu | Settings → Models: add a key or server and click **Load models**. |
+| "Gemini returned HTTP 503" | The provider is overloaded. Try again, or pick another model. |
+| First OCR is slow | The English OCR model (about 10 MB) downloads once, then works offline. |
+| Diagnostics | Tray menu → **Open diagnostics log**. |
+
+## Build from source
+
+Requires Windows 10/11 and Node.js 22 or newer.
 
 ```bash
 cd desktop
-npm run app:install
+npm install
+npm start                 # run from source
+npm run check && npm test # syntax check and unit tests
+npm run dist              # build the installer into desktop/dist-installer/
 ```
 
-Or double-click **`Update IntelliPointer.cmd`** in the repo root. The same command does a first install and every later update:
-1. Runs the unit tests and stops if any fail.
-2. Regenerates the icon bundle and the `.exe` icon, and stamps the version and git commit.
-3. Packages the app with `@electron/packager` into `desktop/dist/`. The first run downloads the Electron runtime, about 100 MB.
-4. **Smoke-tests the build:** it starts the exe with `--smoke-test` (no tray, hotkeys or selection helper) and checks that every window, icon, library and the OCR engine loaded without errors. A broken build is never installed.
-5. Closes the running copy, replaces `%LOCALAPPDATA%\Programs\IntelliPointer AI` (no admin rights needed), and refreshes the **Desktop** and **Start menu** shortcuts. It reads each shortcut back to confirm it points at the installed exe.
-6. Smoke-tests the installed app again, launched from the shortcut's target.
-7. Starts the new version. Add `-- --no-launch` to skip this, or `-- --skip-tests` for a faster rebuild.
+UI tests need an unlocked screen: `npx electron test/ui.e2e.js`, `test/overlay.e2e.js`, `test/providers.e2e.js`. See [desktop/README.md](desktop/README.md) for the code layout.
 
-Settings, sign-in and the latency log live in `%APPDATA%\IntelliPointer AI`, so they survive updates. **Settings → Privacy and diagnostics** shows the installed version and build commit; `+changes` means it was built from uncommitted work. `npm run app:build` only builds into `desktop/dist/` without installing.
+## Releasing an update
 
-**If a shortcut doesn't respond:** another app may already own it. The panel then shows a warning, and you can pick another shortcut in Settings. Otherwise, open **Settings → Privacy and diagnostics → Diagnostics log**. It records each key press, which method found the selected text and how long it took, and any error. It never stores the text itself.
+Users receive updates from GitHub Releases, so publishing a release is all it takes:
 
-To uninstall, quit from the tray, then delete `%LOCALAPPDATA%\Programs\IntelliPointer AI` and the two shortcuts.
+1. Raise `version` in `desktop/package.json` (for example `1.0.1`) and commit.
+2. Tag and push: `git tag v1.0.1 && git push origin v1.0.1`.
+3. The **Release** workflow builds the installer, publishes it with `latest.yml` and the blockmap to a GitHub Release, and every installed copy updates itself.
 
-## Cloud setup (Firebase + Render, free tiers)
-
-### 1. Firebase project (Spark / free plan)
-1. Go to https://console.firebase.google.com, choose **Add project**, and turn Analytics off.
-2. Go to **Build → Authentication → Get started → Sign-in method**, and enable **Email/Password**.
-3. Go to **Build → Firestore Database → Create database** (production mode, any region). Under **Rules**, paste [`firebase/firestore.rules`](firebase/firestore.rules) and click **Publish**. These rules deny all direct client access.
-4. Go to **Project settings → General** and note the **Project ID** and **Web API key**. The web API key is public by design: it identifies the project but grants nothing on its own.
-5. Go to **Project settings → Service accounts → Generate new private key**. This downloads a JSON file. **Keep it secret** and never commit it (`.gitignore` already blocks `serviceAccount*.json`).
-
-### 2. Deploy the API on Render
-1. Push this repository to GitHub (private is fine).
-2. On https://render.com choose **New → Blueprint** and select the repo. Render reads [`render.yaml`](render.yaml).
-3. Fill in the secret environment variables when asked:
-   - `FIREBASE_PROJECT_ID`
-   - `FIREBASE_SERVICE_ACCOUNT_JSON`: paste the whole JSON on one line, or base64 it with `[Convert]::ToBase64String([IO.File]::ReadAllBytes("key.json"))`
-   - `GEMINI_API_KEY`
-4. After the deploy, `https://<your-service>.onrender.com/healthz` should show `{"ok":true,"providers":true,"quota":"firestore"}`.
-
-> The free Render plan sleeps after 15 minutes idle, and the first request after that takes about 30–50 s while it wakes. Open `/healthz` once before a demo. The same `backend/Dockerfile` also deploys to Google Cloud Run if you have billing enabled.
-
-### 3. Point the desktop app at the cloud
-Open the panel and click ⚙ **Settings**:
-- **Backend URL**: `https://<your-service>.onrender.com`. HTTPS is enforced for any non-localhost URL.
-- **Firebase Web API key**: from step 1.4.
-
-Then click **Create account** (first time) or **Sign in**. The panel's model list fills from the backend.
-
-## Environment variables (backend)
-
-Every variable is documented in [`backend/.env.example`](backend/.env.example). The important ones:
-
-| Variable | Purpose |
-|---|---|
-| `FIREBASE_PROJECT_ID` | Required. Used to verify user ID tokens. |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | Enables Firestore quotas. Without it, quotas are kept in memory and reset on restart. |
-| `GEMINI_API_KEY`, `GEMINI_MODELS` | Gemini provider. Defaults to `gemini-flash-latest`, `gemini-flash-lite-latest`, `gemini-2.5-flash`, `gemini-2.5-flash-lite`; if one is rate limited the API automatically tries the next. |
-| `OPENAI_COMPAT_BASE_URL`, `_API_KEY`, `_MODELS`, `_LABEL` | Optional second provider, e.g. a 9Router instance. Mark image-capable models with `:vision`. |
-| `DAILY_REQUEST_LIMIT`, `RATE_LIMIT_PER_MINUTE` | Per-user quota and rate limit. |
-| `AUTH_DISABLED` | Development only. The server refuses to start with it when `NODE_ENV=production` or bound to a non-loopback host. |
-| `TRUST_PROXY` | Set to `1` behind Render or Cloud Run so per-IP limits see the real client IP. |
-
-## API
-
-| Method & path | Auth | Description |
-|---|---|---|
-| `GET /healthz` | none | Liveness + whether providers/Firestore are configured. |
-| `GET /v1/models` | Bearer | Models with `vision` / `webSearch` capability flags. |
-| `GET /v1/usage` | Bearer | Today's request count, limit and token totals for the caller. |
-| `POST /v1/ask` | Bearer | Body `{ model, messages:[{role, text, images:[{mime,data}]}], webSearch }`. Streams SSE events `meta`, `delta`, `sources`, `done` (usage + timings) and `error` (`retryable`). |
-
-## Security design
-
-**Secrets**
-- No secret ever ships in the desktop app.
-- The Gemini key and the service account live only in the host's secret environment variables.
-- The desktop app holds only the public Firebase web key and the user's own tokens.
-
-**Authentication and authorization**
-- Every `/v1/*` call needs a Firebase ID token, verified with `checkRevoked`, so disabled users are rejected immediately.
-- Quotas are keyed by the verified `uid`, so a user can only consume their own allowance.
-- Firestore rules deny all direct client access. Only the backend's Admin SDK writes.
-
-**Token storage on the PC**
-- The refresh token is encrypted with Electron `safeStorage`, which uses Windows DPAPI tied to the Windows user.
-- The 1-hour ID token is kept only in main-process memory.
-- Renderers never see tokens and have no Node access (`contextIsolation`, `sandbox`, a strict CSP, navigation blocked, and only `https:` links open externally).
-
-**Input validation and abuse limits**
-- Validation covers JSON body size, message count, text length, image count and image size.
-- Image types are checked by their real **magic bytes**, not the declared MIME type.
-- There are two rate limiters: per IP before auth, and per user after auth.
-- A daily quota is reserved in a Firestore transaction.
-- The upstream timeout aborts slow requests, and a client disconnect aborts the upstream call too.
-
-**Privacy**
-- Screenshots and conversations are never stored, on disk or in the cloud.
-- Logs contain only ids, counts and timings, never prompts, OCR text or images.
-- A notice before every send names exactly what will leave the PC.
-- The blur tool removes sensitive areas before capture.
-- Selected text is read only on the PC and only after a drag or double-click. Password fields are skipped, and nothing is sent until you click an action.
-- Local-only mode blocks all uploads.
-
-**Transport**
-- HTTPS is enforced for any non-localhost backend.
-- `helmet` adds security headers, and `x-powered-by` is disabled.
-
-## Latency measurement
-
-Each answer shows `capture · OCR · upload size · first token · total`. Every request also appends a row to `%APPDATA%\IntelliPointer AI\latency.csv`; use **Settings → Open latency log** or the tray menu to find it. The backend logs `firstTokenMs` and `totalMs` per request, so network time and model time can be separated.
-
-## Tests
-
-```bash
-cd backend && npm test                        # validation + auth enforcement (13 tests)
-cd backend && npm run test:emulator           # REAL Firebase Auth + Firestore emulators: tokens, atomic quotas, rules, SSE (14 tests incl. model fallback; needs Java 21+, fetches firebase-tools via npx on first run)
-cd backend && npm run verify:deployment -- --url https://<your-api> --firebase-key <key> --email <e> --password <p>   # checks a live deployment, writes evidence
-cd desktop && npm test                        # SSE parser + compiled native helper
-cd desktop && npx electron test/overlay.e2e.js   # overlay: drawing, move, undo, blur, crops at 1.5x DPI
-cd desktop && npx electron test/ui.e2e.js        # panel, model menu, settings tabs, commands, Ask bar (IP_THEME=dark|light, IP_GPU=on for screenshots)
-cd desktop && npx electron test/providers.e2e.js # key encryption, URL rules, local/OpenAI path; live Gemini/Groq if GEMINI_API_KEY / GROQ_API_KEY set
-# with a backend running on :8080:
-cd desktop && npx electron test/panel.e2e.js path\to\image.png   # real OCR + real streamed answer + follow-up
-```
-
-## Known limitations
-
-- Gemini time to first token varies a lot with provider load: we measured 15–20 s during a high-demand period, and Gemini returned HTTP 503 on the larger model, which the app shows as a retryable error. The lighter model is usually faster.
-- tesseract.js downloads its English model (about 10 MB) on first use, then works offline. It reads clean screen text well. It struggles with handwriting and math, so those rely on the vision model.
-- Region selection works on one monitor at a time per capture. Use **+ Region** to add regions from another monitor.
-- The Ask bar relies on apps exposing their selection through Windows UI Automation. Edge, Chrome, Word, Notepad and most standard apps do. For apps that don't, select the text and press **Alt+Shift+A**, which falls back to a Ctrl+C round-trip.
-- The selection helper is a small PowerShell + C# process (`desktop/src/main/native/selection-helper.ps1`) started with `-ExecutionPolicy Bypass` for that one process only. Some antivirus tools may flag a global mouse hook. Turn the bar off in Settings if that's a problem; the hotkey still works.
-- The free Render tier sleeps when idle (see the Render section above).
+To publish from your own PC instead, set `GH_TOKEN` and run `npm run release` in `desktop/`.
 
 ## License
 

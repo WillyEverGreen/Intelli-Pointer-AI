@@ -2,36 +2,12 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
-  backend:
-    name: Backend (tests, emulator integration, audit)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: backend/package-lock.json
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - run: npm ci
-      - run: npm test
-      # Real Firebase Authentication + Firestore emulators: token verification,
-      # atomic quotas under concurrency, security rules, SSE streaming.
-      - run: npm run test:emulator
-      # Fail the build if a production dependency has a known vulnerability.
-      - run: npm audit --omit=dev --audit-level=moderate
-
   desktop:
-    name: Desktop (syntax check, unit tests, audit)
+    name: Desktop (check, tests, audit, installer build)
     runs-on: windows-latest
     defaults:
       run:
@@ -47,10 +23,5 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm audit --omit=dev --audit-level=moderate
-
-  container:
-    name: Backend container builds
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: docker build -t intellipointer-api backend
+      # Proves the installer builds and the packaged app starts (no publishing).
+      - run: npm run dist

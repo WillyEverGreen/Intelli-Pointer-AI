@@ -1,7 +1,7 @@
 {
-  "name": "intellipointer-desktop",
+  "name": "intellipointer-ai",
   "productName": "IntelliPointer AI",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Windows desktop assistant: mark anything on screen, ask an AI about it, get a streamed answer in a floating panel.",
   "main": "src/main/main.js",
@@ -10,21 +10,77 @@
     "check": "node scripts/check.js",
     "test": "node --test test/*.test.js",
     "icons": "node scripts/build-icons.js",
-    "report": "electron ../docs/tools/build-report.js",
-    "latex": "node ../docs/tools/build-latex.js && node ../docs/tools/check-latex.js",
-    "diagrams": "electron ../docs/tools/svg-to-png.js ../docs/architecture.svg ../docs/sequence.svg",
-    "app:build": "node scripts/install-app.mjs --build-only",
-    "app:install": "node scripts/install-app.mjs"
+    "dist": "node scripts/prepare-build.js && electron-builder --win --publish never && node scripts/smoke-test.js dist-installer/win-unpacked",
+    "release": "node scripts/prepare-build.js && electron-builder --win --publish always && node scripts/smoke-test.js dist-installer/win-unpacked"
   },
   "dependencies": {
     "@highlightjs/cdn-assets": "^11.12.0",
     "dompurify": "^3.4.17",
+    "electron-updater": "^6.8.11",
     "marked": "^18.1.2",
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
-    "@electron/packager": "^20.3.0",
     "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
     "lucide-static": "^1.61.0"
+  },
+  "author": "IntelliPointer contributors",
+  "license": "MIT",
+  "homepage": "https://github.com/WillyEverGreen/Intelli-Pointer-AI",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WillyEverGreen/Intelli-Pointer-AI.git"
+  },
+  "bugs": {
+    "url": "https://github.com/WillyEverGreen/Intelli-Pointer-AI/issues"
+  },
+  "build": {
+    "appId": "dev.intellipointer.desktop",
+    "productName": "IntelliPointer AI",
+    "copyright": "Copyright (c) 2026 IntelliPointer contributors",
+    "asar": false,
+    "directories": {
+      "output": "dist-installer",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "!**/*.map"
+    ],
+    "electronLanguages": [
+      "en-US"
+    ],
+    "afterPack": "scripts/after-pack.js",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "WillyEverGreen",
+        "repo": "Intelli-Pointer-AI"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "IntelliPointer-AI-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "IntelliPointer AI",
+      "deleteAppDataOnUninstall": false
+    }
   }
 }

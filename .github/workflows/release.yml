@@ -1,0 +1,36 @@
+name: Release
+
+# Push a tag such as v1.0.1 (after raising "version" in desktop/package.json).
+# Builds the installer and publishes it, latest.yml and the blockmap to a
+# GitHub Release; installed copies of the app pick the update up by themselves.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - name: Tag matches package.json
+        shell: bash
+        run: |
+          v="v$(node -p "require('./package.json').version")"
+          [ "$v" = "${GITHUB_REF_NAME}" ] || { echo "Tag ${GITHUB_REF_NAME} does not match package.json ($v)"; exit 1; }
+      - run: npm run check
+      - run: npm test
+      - run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

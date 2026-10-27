@@ -14,12 +14,12 @@ desktop/
 │   │   ├── native/
 │   │   │   ├── selection-helper.cs    Native helper source (C#): mouse hook, UI Automation, BitBlt
 │   │   │   └── selection-helper.ps1   Fallback launcher if the compiled helper is unavailable
-│   │   ├── api.js               Model requests: routes to direct providers or the cloud API
+│   │   ├── api.js               Streams answers from the chosen provider (cancel, cache)
 │   │   ├── providers.js         Direct providers: Gemini, Groq, OpenAI-compatible (9Router, Ollama…)
 │   │   ├── commands.js          Command defaults + validation
 │   │   ├── settings.js          Non-secret preferences (JSON) + migrations
 │   │   ├── secrets.js           Provider API keys, encrypted with Windows DPAPI
-│   │   ├── auth.js              Firebase sign-in for the cloud backend
+│   │   ├── updater.js           Automatic updates from GitHub Releases (electron-updater)
 │   │   ├── clipboard.js         Clipboard snapshot/restore (async API)
 │   │   ├── ocr.js               Local OCR (tesseract.js), loaded on demand
 │   │   ├── log.js / latency.js  Diagnostics log and per-request timings
@@ -35,7 +35,9 @@ desktop/
 │       ├── overlay/             Screen selection overlay and drawing tools
 │       └── bubble/              Ask bar shown next to selected text
 ├── scripts/
-│   ├── install-app.mjs          Test → build → install → verify (npm run app:install)
+│   ├── prepare-build.js         Icons and build stamp for a release build
+│   ├── after-pack.js            electron-builder hook: compiles the native helper into the app
+│   ├── smoke-test.js            Starts a built app and checks every window and library loaded
 │   ├── build-helper.js          Compiles the native helper with the Windows C# compiler
 │   ├── build-icons.js           Generates shared/icons.js from Lucide
 │   └── check.js                 Syntax-checks every file (npm run check)
@@ -57,8 +59,8 @@ desktop/
 - **Selected text (Alt+Shift+A / Ask bar):** `selection.js` asks the helper
   (UI Automation first, then a Ctrl+C round trip that restores the clipboard).
 - **Asking:** `panel.js` builds the messages; `api.ask` streams from the chosen
-  source — `providers.js` for Gemini / Groq / local servers, or the cloud
-  backend for `cloud:` models — and relays events to the panel.
+  source (`providers.js`: Gemini, Groq or a local OpenAI-compatible server)
+  and relays events to the panel.
 
 ## Extending
 
@@ -97,9 +99,20 @@ npm start                    # run from source
 npm run check                # syntax-check every file
 npm test                     # unit tests (incl. the compiled helper)
 npx electron test/ui.e2e.js  # panel, model menu, settings, commands
-npm run app:install          # test, build, install, verify shortcuts, launch
+npm run dist                 # build the NSIS installer into dist-installer/ and smoke-test it
 ```
 
 The Electron tests (`test/*.e2e.js`) open real windows. Tests that capture the
 screen or use the clipboard need an unlocked, awake display; they report
 `SKIP` instead of failing when the screen is locked.
+
+## Releases and automatic updates
+
+`npm run dist` builds `dist-installer/IntelliPointer-AI-Setup-<version>.exe` with
+electron-builder (NSIS, per-user, no admin). The packaged app contains
+`app-update.yml`, which points `electron-updater` (`src/main/updater.js`) at this
+repository's GitHub Releases. Pushing a `v<version>` tag runs
+`.github/workflows/release.yml`, which publishes the installer, `latest.yml` and
+the blockmap; installed apps find the new `latest.yml`, download the difference
+and install it on quit. The artifact name has no spaces on purpose: GitHub
+renames spaces to dots, which would break the URL recorded in `latest.yml`.

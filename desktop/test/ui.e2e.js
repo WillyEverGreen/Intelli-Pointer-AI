@@ -63,7 +63,6 @@ app.whenReady().then(async () => {
     build: { version: '0.1.0', commit: 'test', builtAt: new Date().toISOString() },
   }));
   h('settings:update', (_e, p) => ({ settings: settings.update(p), hotkeyErrors: [] }));
-  h('auth:status', () => ({ signedIn: false, secureStorage: true }));
   h('models:list', () => ({
     models: [
       { id: 'local:gemini-3.8-flash', label: '9Router · gemini-3.8-flash', group: '9Router (this network)', vision: true, latencyMs: 640, direct: true, local: true },
@@ -81,8 +80,9 @@ app.whenReady().then(async () => {
   let providerSaves = 0;
   h('providers:save', () => { providerSaves += 1; return providerStatus(); });
   h('providers:fetchModels', () => []);
+  h('update:status', () => ({ supported: false, status: 'idle', current: '1.0.0', message: '' }));
   h('hotkeys:check', (_e, acc) => (acc === 'Ctrl+Alt+Q' ? { ok: false, reason: 'Another app already uses this shortcut.' } : { ok: true }));
-  for (const ch of ['usage:get', 'ask:cancel', 'ask:start', 'clipboard:write', 'panel:pin', 'panel:resize', 'panel:hide', 'open:latencyLog', 'open:diagnostics', 'capture:start', 'auth:signIn', 'auth:signOut', 'providers:speedTest']) h(ch, () => null);
+  for (const ch of ['ask:cancel', 'ask:start', 'clipboard:write', 'panel:pin', 'panel:resize', 'panel:hide', 'open:latencyLog', 'open:diagnostics', 'capture:start', 'auth:signIn', 'auth:signOut', 'providers:speedTest']) h(ch, () => null);
 
   const panel = new BrowserWindow({
     width: 460, height: 640, frame: false, alwaysOnTop: true, show: true,
@@ -130,15 +130,16 @@ app.whenReady().then(async () => {
   await js(`document.getElementById('btn-settings').click()`);
   await wait(500);
   const sources = await js(`[...document.querySelectorAll('.source-row .strong')].map((s) => s.textContent)`);
-  check(sources.join() === 'Gemini,Groq,9Router,IntelliPointer Cloud', `source list (${sources.join(', ')})`);
+  check(sources.join() === 'Gemini,Groq,9Router', `source list (${sources.join(', ')})`);
   const switches = await js(`document.querySelectorAll('.source-row .switch').length`);
-  check(switches === 4, 'each source has a show-in-menu switch');
+  check(switches === 3, 'each source has a show-in-menu switch');
   // Credentials save themselves when you leave the field (no Save click needed).
   const savesBefore = providerSaves;
-  await js(`(() => { const el = document.getElementById('s-firebaseApiKey'); el.value = 'AIzaTestKey123'; el.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await js(`(() => { const el = document.querySelector('.prov-pane[data-prov="gemini"] [data-role="key"]'); el.value = 'AIzaTestKey123'; el.dispatchEvent(new Event('change', { bubbles: true })); })()`);
   await wait(400);
   check(providerSaves > savesBefore, 'a typed credential is saved as soon as the field loses focus');
   await snap('settings-models');
+  check((await js(`document.getElementById('update-status').textContent`)).includes('installed app'), 'Settings shows that updates work in the installed app (running from source here)');
 
   // Settings: Commands
   await js(`document.querySelector('[data-tab="commands"]').click()`);

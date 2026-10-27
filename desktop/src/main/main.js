@@ -1,9 +1,9 @@
 const path = require('node:path');
 const {
-  app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, screen, clipboard, nativeImage, shell, Notification, nativeTheme,
+  app, BrowserWindow, Tray, session, Menu, globalShortcut, ipcMain, screen, clipboard, nativeImage, shell, Notification, nativeTheme,
 } = require('electron');
 const settings = require('./settings');
-const auth = require('./auth');
+const updater = require('./updater');
 const capture = require('./capture');
 const ocr = require('./ocr');
 const api = require('./api');
@@ -29,7 +29,7 @@ const guarded = (name, fn) => (...args) => Promise.resolve().then(() => fn(...ar
   log(`${name}.error`, { error: err.message, stack: String(err.stack).split(/\r?\n/).slice(0, 3).join(' | ') });
 });
 
-const MAX_IMAGE_BYTES = 3.5 * 1024 * 1024; // backend limit is 4 MB decoded
+const MAX_IMAGE_BYTES = 3.5 * 1024 * 1024; // stays under the 4 MB image limit of the providers
 const PANEL_SIZE = { width: 460, height: 600 };
 
 let panel = null;
@@ -77,6 +77,7 @@ function createPanel() {
       spellcheck: false,
     },
   });
+  panel.setContentProtection(true); // never part of a screenshot or screen share, even for a frame
   panel.loadFile(path.join(__dirname, '..', 'renderer', 'panel', 'panel.html'));
   panel.on('close', (e) => {
     if (!app.isQuitting) {
@@ -108,6 +109,15 @@ function placePanel(bbox) {
     else if (bbox.y - gap - h >= wa.y) pos = { x: clampX(bbox.x), y: bbox.y - gap - h };
   }
   panel.setPosition(Math.round(pos.x), Math.round(pos.y));
+}
+
+// Every shortcut starts with the chat window out of the way. Resolves to
+// whether it was visible, after giving the compositor a moment to remove it.
+async function hidePanelForShortcut() {
+  if (!panel.isVisible()) return false;
+  panel.hide();
+  await new Promise((r) => setTimeout(r, 80));
+  return true;
 }
 
 function showPanel({ focus = true, bbox = null } = {}) {
@@ -151,6 +161,7 @@ function createBubble() {
     },
   });
   bubble.setAlwaysOnTop(true, 'pop-up-menu');
+  bubble.setContentProtection(true);
   bubble.loadFile(path.join(__dirname, '..', 'renderer', 'bubble', 'bubble.html'));
   bubble.webContents.on('will-navigate', (e) => e.preventDefault());
 }
@@ -213,6 +224,17 @@ function openWithText(text, { action = null, kind = 'selection', bbox = null } =
 // on the selection, or, if no text is selected, on a screen region instead.
 async function askAboutSelection({ commandId = null } = {}) {
   const t0 = performance.now();
+  // Our own panel must not be the foreground window (it would hide the user's
+  // selection) and must not be on screen if this falls back to a capture.
+  const panelWasVisible = await hidePanelForShortcut();
+  try {
+    return await askAboutSelectionInner({ commandId, t0 });
+  } finally {
+    if (panelWasVisible && !panel.isVisible() && !capture.isActive()) panel.showInactive();
+  }
+}
+
+async function askAboutSelectionInner({ commandId, t0 }) {
   log('hotkey.pressed', { hotkey: commandId ? `command:${commandId}` : 'selection', helperReady: selection.isAvailable() });
   hideBubble();
   const auto = await selection.readViaAutomation();
@@ -282,8 +304,7 @@ async function startCapture(mode = 'replace', presetAction = null) {
   if (settings.get().ocrEnabled) ocr.warmUp();
   hideBubble();
   const tHotkey = performance.now();
-  const panelWasVisible = panel.isVisible();
-  if (panelWasVisible) panel.hide(); // keep our own panel out of the screenshot
+  const panelWasVisible = await hidePanelForShortcut(); // keep our own panel out of the screenshot
 
   let result;
   try {
@@ -429,12 +450,15 @@ function updateTrayMenu() {
     { type: 'separator' },
     { label: 'Settings', click: () => { showPanel({ focus: true }); panel.webContents.send('panel:open-settings'); } },
     { label: 'Open diagnostics log', click: () => shell.showItemInFolder(logFile()) },
+    ...(updater.getState().status === 'ready'
+      ? [{ label: `Restart to update to ${updater.getState().version}`, click: () => updater.installNow() }]
+      : []),
     { type: 'separator' },
     { label: 'Quit IntelliPointer', click: () => { app.isQuitting = true; app.quit(); } },
   ]));
 }
 
-// Written by scripts/install-app.mjs; absent when running from source.
+// Written by scripts/prepare-build.js; absent when running from source.
 function buildInfo() {
   try {
     return require('../build-info.json');
@@ -496,9 +520,6 @@ function registerIpc() {
     if (!next.selectionBubble) hideBubble();
     return { settings: next, hotkeyErrors: failed };
   });
-  handlePanel('auth:status', () => auth.status());
-  handlePanel('auth:signIn', (_e, { email, password, create }) => auth.signIn(String(email), String(password), { create: Boolean(create) }));
-  handlePanel('auth:signOut', () => auth.signOut());
   handlePanel('models:list', () => api.listModels());
   handlePanel('providers:status', () => ({ providers: settings.get().providers, keys: secrets.status() }));
   handlePanel('providers:fetchModels', (_e, provider, opts) => providers.fetchModels(String(provider), {
@@ -509,7 +530,7 @@ function registerIpc() {
     apiKey: typeof opts?.apiKey === 'string' && opts.apiKey.trim() ? opts.apiKey.trim() : undefined,
     baseUrl: typeof opts?.baseUrl === 'string' && opts.baseUrl.trim() ? opts.baseUrl.trim() : undefined,
   }));
-  // patch: { cloud: { enabled }, gemini|groq|local: { apiKey?, models?, baseUrl?, label? } }
+  // patch: { gemini|groq|local: { apiKey?, models?, baseUrl?, label? } }
   // apiKey: new key, '' to remove, undefined to keep.
   handlePanel('providers:save', async (_e, patch) => {
     for (const name of ['gemini', 'groq', 'local']) {
@@ -518,7 +539,9 @@ function registerIpc() {
     settings.update({ providers: patch || {} });
     return { providers: settings.get().providers, keys: secrets.status() };
   });
-  handlePanel('usage:get', () => api.usage());
+  handlePanel('update:status', () => updater.getState());
+  handlePanel('update:check', () => updater.check({ manual: true }));
+  handlePanel('update:install', () => updater.installNow());
   handlePanel('capture:start', (_e, mode) => startCapture(mode === 'append' ? 'append' : 'replace'));
   handlePanel('ask:cancel', (_e, reqId) => api.cancel(reqId));
   handlePanel('clipboard:write', (_e, text) => clipboard.writeText(String(text)));
@@ -629,7 +652,7 @@ async function runSmokeTest(outFile) {
   check(`idle CPU ${report.idleCpuPercent}% (under 2%)`, report.idleCpuPercent < 2);
   // Saved credentials survive updates: report whether they could be read back (never their values).
   const keyStatus = secrets.status();
-  report.saved = { secureStorage: auth.status().secureStorage, signedIn: auth.status().signedIn, providerKeys: Object.keys(keyStatus).filter((n) => keyStatus[n].set) };
+  report.saved = { secureStorage: require('electron').safeStorage.isEncryptionAvailable(), providerKeys: Object.keys(keyStatus).filter((n) => keyStatus[n].set) };
   report.build = buildInfo();
   require('node:fs').writeFileSync(outFile, JSON.stringify(report, null, 2));
   app.exit(report.ok ? 0 : 1);
@@ -638,13 +661,18 @@ async function runSmokeTest(outFile) {
 app.whenReady().then(async () => {
   if (!isPrimary) return;
   app.setAppUserModelId('dev.intellipointer.desktop');
-  await auth.restore();
+  // The UI is local and needs no browser permissions (camera, location, notifications, ...).
+  session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
+  session.defaultSession.setPermissionCheckHandler(() => false);
+  // An earlier version kept an encrypted cloud sign-in token here; nothing uses it now.
+  try { require('node:fs').rmSync(path.join(app.getPath('userData'), 'session.bin'), { force: true }); } catch { /* ignore */ }
   await secrets.load();
   if (SMOKE_TEST_OUT) {
     createPanel();
     createBubble();
     capture.init();
     registerIpc();
+  updater.init({ onStateChange: updateTrayMenu });
     await runSmokeTest(SMOKE_TEST_OUT);
     return;
   }

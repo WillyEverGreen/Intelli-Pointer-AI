@@ -11,8 +11,8 @@
 window.IPSettingsView = ({ cleanErr, onSaved }) => {
   const $ = (id) => document.getElementById(id);
   const PROVS = ['gemini', 'groq', 'local'];
-  const SOURCES = ['gemini', 'groq', 'local', 'cloud'];
-  const FIELDS = ['backendUrl', 'firebaseApiKey', 'defaultAction', 'localOnly', 'ocrEnabled', 'selectionBubble', 'maxTurns', 'hardwareAcceleration'];
+  const SOURCES = ['gemini', 'groq', 'local'];
+  const FIELDS = ['defaultAction', 'localOnly', 'autoUpdate', 'ocrEnabled', 'selectionBubble', 'maxTurns', 'hardwareAcceleration'];
 
   let settings = {};
   let status = null; // { providers, keys } from main
@@ -39,10 +39,6 @@ window.IPSettingsView = ({ cleanErr, onSaved }) => {
   // ---------- Models: source list ----------
 
   function sourceStatus(p) {
-    if (p === 'cloud') {
-      if (!settings.firebaseApiKey) return 'Not set up';
-      return `${settings.backendUrl.replace(/^https?:\/\//, '')}`;
-    }
     const n = [...provDraft[p].rows.values()].filter((r) => r.use).length;
     const ready = p === 'local' ? Boolean(role('local', 'url').value.trim()) : status.keys[p].set || Boolean(role(p, 'key').value.trim());
     if (!ready) return 'Not set up';
@@ -51,7 +47,7 @@ window.IPSettingsView = ({ cleanErr, onSaved }) => {
 
   function sourceName(p) {
     if (p === 'local') return role('local', 'label').value.trim() || 'Local server';
-    return { gemini: 'Gemini', groq: 'Groq', cloud: 'IntelliPointer Cloud' }[p];
+    return { gemini: 'Gemini', groq: 'Groq' }[p];
   }
 
   function renderSources() {
@@ -293,7 +289,7 @@ window.IPSettingsView = ({ cleanErr, onSaved }) => {
   }
 
   function providerPatch() {
-    const patch = { cloud: { enabled: enabled.cloud } };
+    const patch = {};
     for (const p of PROVS) {
       const typed = role(p, 'key').value.trim();
       const draft = provDraft[p];
@@ -336,40 +332,38 @@ window.IPSettingsView = ({ cleanErr, onSaved }) => {
       if (configured && !provDraft[p].rows.size) setProvStatus(p, 'Click Load models to choose which models to use.');
     }
     // Open the first source that is set up.
-    selectedSource = PROVS.find((p) => (p === 'local' ? status.providers.local.baseUrl : status.keys[p].set))
-      || (settings.firebaseApiKey ? 'cloud' : 'gemini');
+    selectedSource = PROVS.find((p) => (p === 'local' ? status.providers.local.baseUrl : status.keys[p].set)) || 'gemini';
     renderSources();
   }
 
-  // ---------- Cloud account ----------
+  // ---------- Updates ----------
 
-  async function refreshAuth() {
-    const s = await window.ip.authStatus();
-    $('auth-out').hidden = s.signedIn;
-    $('auth-in').hidden = !s.signedIn;
-    $('who').textContent = s.email || '';
-    $('auth-msg').textContent = s.secureStorage ? '' : 'Windows secure storage is unavailable, so you will need to sign in again after restarting.';
-    if (s.signedIn) {
-      try {
-        const u = await window.ip.usage();
-        $('usage').textContent = `${u.used} of ${u.limit} requests used today${u.outputTokens ? ` · ${u.outputTokens.toLocaleString()} output tokens` : ''}`;
-      } catch (err) {
-        $('usage').textContent = cleanErr(err);
-      }
-    }
+  async function showUpdate(st) {
+    const btn = $('btn-update');
+    btn.textContent = st.status === 'ready' ? 'Restart to update' : 'Check for updates';
+    btn.disabled = st.status === 'checking' || st.status === 'downloading';
+    $('update-status').textContent = !st.supported
+      ? 'Updates work in the installed app.'
+      : st.status === 'downloading' ? `Downloading ${st.version || 'update'}… ${st.percent}%` : st.message || `Version ${st.current}`;
   }
 
-  async function doSignIn(create) {
-    $('auth-msg').textContent = create ? 'Creating account…' : 'Signing in…';
-    try {
-      await save({ quiet: true }); // the Firebase key must be saved first
-      await window.ip.signIn({ email: $('email').value.trim(), password: $('password').value, create });
-      $('password').value = '';
-      enabled.cloud = true;
-      await refreshAuth();
-      renderSources();
-    } catch (err) {
-      $('auth-msg').textContent = cleanErr(err);
+  async function refreshUpdate() {
+    showUpdate(await window.ip.updateStatus());
+  }
+
+  async function onUpdateClick() {
+    let st = await window.ip.updateStatus();
+    if (st.status === 'ready') {
+      await window.ip.installUpdate();
+      return;
+    }
+    st = await window.ip.checkForUpdates();
+    showUpdate(st);
+    // Follow the download until it finishes (or fails).
+    for (let i = 0; i < 300 && ['checking', 'downloading'].includes(st.status); i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      st = await window.ip.updateStatus();
+      showUpdate(st);
     }
   }
 
@@ -535,7 +529,7 @@ window.IPSettingsView = ({ cleanErr, onSaved }) => {
     $('btn-settings').setAttribute('aria-pressed', 'true');
     $('settings-msg').textContent = '';
     selectTab(tab);
-    refreshAuth();
+    refreshUpdate();
   }
 
   function close() {
@@ -604,8 +598,6 @@ window.IPSettingsView = ({ cleanErr, onSaved }) => {
     if (el.value.trim()) save({ quiet: true }).then((ok) => { if (ok) $('settings-msg').textContent = 'Saved'; });
   });
   for (const p of PROVS) autosave(role(p, 'key'));
-  autosave($('s-backendUrl'));
-  autosave($('s-firebaseApiKey'));
   role('local', 'url').addEventListener('input', renderSources);
   role('local', 'label').addEventListener('input', renderSources);
   // A preset may list several URLs (9Router: production port, then dev port);
@@ -619,13 +611,7 @@ window.IPSettingsView = ({ cleanErr, onSaved }) => {
       }
     });
   }
-  $('btn-signin').addEventListener('click', () => doSignIn(false));
-  $('btn-signup').addEventListener('click', () => doSignIn(true));
-  $('btn-signout').addEventListener('click', async () => {
-    await window.ip.signOut();
-    refreshAuth();
-  });
-
+  $('btn-update').addEventListener('click', onUpdateClick);
   $('btn-add-command').addEventListener('click', () => openEditor(-1));
   $('btn-cmd-cancel').addEventListener('click', closeEditor);
   $('btn-cmd-done').addEventListener('click', commitEditor);

@@ -4,8 +4,8 @@ const { app } = require('electron');
 const commands = require('./commands');
 
 // Non-secret user preferences, stored as JSON in the app's userData folder.
-// Secrets live elsewhere, encrypted with safeStorage: the Firebase refresh
-// token in auth.js and provider API keys in secrets.js.
+// Secrets live elsewhere, encrypted with safeStorage: provider API keys in
+// secrets.js.
 
 const PROVIDER_IDS = ['gemini', 'groq', 'local'];
 
@@ -19,11 +19,10 @@ const HOTKEY_FALLBACKS = {
 const OLD_DEFAULT_HOTKEYS = new Set(['CommandOrControl+Shift+Space', 'CommandOrControl+Shift+X']);
 
 const DEFAULTS = {
-  backendUrl: 'http://127.0.0.1:8080',
-  firebaseApiKey: '',
   defaultModel: '',
   defaultAction: 'explain',
   localOnly: false,
+  autoUpdate: true,
   ocrEnabled: true,
   maskOutside: true,
   maxTurns: 10,
@@ -36,7 +35,6 @@ const DEFAULTS = {
   // Model sources. `enabled` = shown in the model menu; `models` is the
   // user's chosen list: [{ id, vision, reasoning, latencyMs }].
   providers: {
-    cloud: { enabled: false },
     gemini: { enabled: true, models: [] },
     groq: { enabled: true, models: [] },
     local: { enabled: true, baseUrl: '', label: 'Local', models: [] },
@@ -60,6 +58,11 @@ function load() {
   for (const [id, p] of Object.entries(saved.providers || {})) cache.providers[id] = { ...cache.providers[id], ...p };
   cache.commands = commands.clean(saved.commands ?? DEFAULTS.commands);
   // Migrations from earlier versions.
+  // The cloud-backend source was removed: drop its leftovers so they are not rewritten forever.
+  delete cache.backendUrl;
+  delete cache.firebaseApiKey;
+  delete cache.providers.cloud;
+  if (String(cache.defaultModel).startsWith('cloud:')) cache.defaultModel = '';
   if ('clipboardHotkey' in saved) {
     if (!('selectionHotkey' in saved)) cache.selectionHotkey = saved.clipboardHotkey;
     delete cache.clipboardHotkey;
@@ -104,7 +107,7 @@ function cleanModels(list) {
 
 function cleanProviders(current, patch) {
   const next = structuredClone(current);
-  for (const id of ['cloud', ...PROVIDER_IDS]) {
+  for (const id of PROVIDER_IDS) {
     if (typeof patch[id]?.enabled === 'boolean') next[id].enabled = patch[id].enabled;
   }
   for (const id of PROVIDER_IDS) {
@@ -131,7 +134,6 @@ function update(patch) {
   if (patch?.providers && typeof patch.providers === 'object') next.providers = cleanProviders(current.providers, patch.providers);
   if (Array.isArray(patch?.commands)) next.commands = commands.clean(patch.commands);
   for (const key of ['captureHotkey', 'selectionHotkey']) next[key] = String(next[key] || '').slice(0, 60);
-  if (next.backendUrl) next.backendUrl = checkUrl(next.backendUrl, 'Backend URL').origin;
   next.maxTurns = Math.min(50, Math.max(1, Math.round(next.maxTurns)));
   cache = next;
   fs.mkdirSync(path.dirname(file()), { recursive: true });
