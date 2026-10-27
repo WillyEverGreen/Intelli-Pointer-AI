@@ -577,18 +577,34 @@ async function runSmokeTest(outFile) {
       if (e.level === 'error' || e.level === 3) errors.push(`${path.basename(w.webContents.getURL().split('?')[0])}: ${e.message}`);
     });
   }
-  await Promise.all(wins.map((w) => (w.webContents.isLoading() ? new Promise((r) => w.webContents.once('did-finish-load', r)) : null)));
+  // Each window gets 15 s to load (a locked screen can stall rendering), so
+  // this reports a failure instead of hanging.
+  const loaded = (w) => new Promise((resolve) => {
+    if (!w.webContents.isLoading()) return resolve(true);
+    const timer = setTimeout(() => resolve(false), 15000);
+    w.webContents.once('did-finish-load', () => {
+      clearTimeout(timer);
+      resolve(true);
+    });
+  });
+  const loadResults = await Promise.all(wins.map(loaded));
   await new Promise((r) => setTimeout(r, 1500)); // let the panel finish its startup calls
 
-  for (const w of wins) {
+  for (const [i, w] of wins.entries()) {
     const page = path.basename(w.webContents.getURL().split('?')[0]);
+    if (!loadResults[i]) {
+      check(`${page} loaded`, false, 'did not finish loading within 15 s (is the screen locked?)');
+      continue;
+    }
     const libs = page === 'panel.html' ? "&& typeof marked === 'object' && typeof DOMPurify === 'function' && typeof hljs === 'object' && typeof window.ip === 'object'" : '';
     const ok = await w.webContents.executeJavaScript(`typeof window.ipIcon === 'function' && document.querySelectorAll('svg.icon').length > 0 ${libs}`);
     check(`${page} loaded with icons${libs ? ' and libraries' : ''}`, ok);
   }
   const pages = wins.map((w) => path.basename(w.webContents.getURL().split('?')[0]));
   check('panel, overlay and Ask bar windows exist', ['panel.html', 'overlay.html', 'bubble.html'].every((p) => pages.includes(p)), pages.join(', '));
-  check('selection helper script present', require('node:fs').existsSync(path.join(__dirname, 'native', 'selection-helper.ps1')));
+  const nativeDir = path.join(__dirname, 'native');
+  check(app.isPackaged ? 'native helper exe bundled' : 'native helper source present',
+    require('node:fs').existsSync(path.join(nativeDir, app.isPackaged ? 'IntelliPointerHelper.exe' : 'selection-helper.cs')));
   try {
     require.resolve('tesseract.js');
     check('OCR engine bundled', true);
