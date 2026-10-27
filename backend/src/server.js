@@ -108,7 +108,13 @@ export function createApp() {
       });
       const timeout = setTimeout(() => controller.abort(new Error('upstream_timeout')), config.limits.upstreamTimeoutMs);
 
-      const useSearch = webSearch && model.webSearch;
+      // If the chosen model is rate limited or down before it produced anything,
+      // try the other models that can handle this request (same quota charge).
+      const candidates = [resolved, ...listModels()
+        .filter((m) => m.id !== model.id && (imageCount === 0 || m.vision))
+        .map((m) => resolveModel(m.id))];
+      let active = resolved;
+      let useSearch = webSearch && model.webSearch;
       send('meta', { requestId, model: model.id, webSearch: useSearch, quota: { used: quota.used, limit: quota.limit } });
 
       const tUpstream = performance.now();
@@ -116,20 +122,33 @@ export function createApp() {
       let usage = { inputTokens: 0, outputTokens: 0 };
       let outcome = 'ok';
       try {
-        for await (const ev of provider.stream({
-          model: model.upstreamId, messages, systemPrompt: SYSTEM_PROMPT, webSearch: useSearch, signal: controller.signal,
-        })) {
-          if (ev.type === 'delta') {
-            if (firstTokenMs === null) firstTokenMs = Math.round(performance.now() - tUpstream);
-            send('delta', { text: ev.text });
-          } else if (ev.type === 'sources') {
-            send('sources', { items: ev.items });
-          } else if (ev.type === 'usage') {
-            usage = { inputTokens: ev.inputTokens, outputTokens: ev.outputTokens };
+        for (let i = 0; i < candidates.length; i += 1) {
+          active = candidates[i];
+          useSearch = webSearch && active.model.webSearch;
+          if (i > 0) send('meta', { requestId, model: active.model.id, webSearch: useSearch, fallbackFrom: model.id });
+          try {
+            for await (const ev of active.provider.stream({
+              model: active.model.upstreamId, messages, systemPrompt: SYSTEM_PROMPT, webSearch: useSearch, signal: controller.signal,
+            })) {
+              if (ev.type === 'delta') {
+                if (firstTokenMs === null) firstTokenMs = Math.round(performance.now() - tUpstream);
+                send('delta', { text: ev.text });
+              } else if (ev.type === 'sources') {
+                send('sources', { items: ev.items });
+              } else if (ev.type === 'usage') {
+                usage = { inputTokens: ev.inputTokens, outputTokens: ev.outputTokens };
+              }
+            }
+            break;
+          } catch (err) {
+            const canFallBack = firstTokenMs === null && err.retryable && !controller.signal.aborted && i < candidates.length - 1;
+            if (!canFallBack) throw err;
+            log('warn', 'model_fallback', { requestId, from: active.model.id, to: candidates[i + 1].model.id, reason: err.message });
           }
         }
         send('done', {
           usage,
+          model: active.model.id,
           timings: { serverPreMs: Math.round(tUpstream - t0), firstTokenMs, totalMs: Math.round(performance.now() - t0) },
         });
       } catch (err) {
@@ -145,9 +164,9 @@ export function createApp() {
         finished = true;
         clearTimeout(timeout);
         res.end();
-        recordUsage(req.user.uid, { ...usage, provider: provider.id, model: model.id });
+        recordUsage(req.user.uid, { ...usage, provider: active.provider.id, model: active.model.id });
         log('info', 'ask', {
-          requestId, uid: req.user.uid, model: model.id, images: imageCount, turns: messages.length,
+          requestId, uid: req.user.uid, model: active.model.id, images: imageCount, turns: messages.length,
           webSearch: useSearch, outcome, firstTokenMs, totalMs: Math.round(performance.now() - t0), ...usage,
         });
       }

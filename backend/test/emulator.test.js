@@ -59,7 +59,7 @@ before(async () => {
     req.on('end', () => {
       upstreamLog.requests += 1;
       const body = JSON.parse(raw || '{}');
-      if (body.model === 'fail') {
+      if (body.model === 'fail' || upstreamLog.failAll) {
         res.statusCode = 500;
         res.setHeader('content-type', 'application/json');
         return res.end(JSON.stringify({ error: { message: 'upstream exploded' } }));
@@ -221,12 +221,28 @@ test('input validation: image size, image on a text-only model, unknown model', 
   assert.equal((await ask(token, question('openai/does-not-exist'))).status, 400);
 });
 
-test('upstream failures surface as a retryable SSE error', async () => {
-  const { token } = await signUp('fail@example.com');
+test('a failing model falls back to another one and the user is charged once', async () => {
+  const { token } = await signUp('fallback@example.com');
   const events = sseEvents(await (await ask(token, question('openai/fail'))).text());
-  const err = events.find((e) => e.event === 'error');
-  assert.ok(err, 'error event sent');
-  assert.match(err.data.message, /upstream exploded/);
+  const metas = events.filter((e) => e.event === 'meta');
+  assert.equal(metas.at(-1).data.fallbackFrom, 'openai/fail');
+  assert.notEqual(metas.at(-1).data.model, 'openai/fail');
+  assert.ok(events.some((e) => e.event === 'delta'), 'answer delivered by the fallback model');
+  assert.ok(!events.some((e) => e.event === 'error'));
+  assert.equal(metas[0].data.quota.used, 1);
+});
+
+test('when every model fails the error surfaces as a retryable SSE error', async () => {
+  const { token } = await signUp('fail@example.com');
+  upstreamLog.failAll = true;
+  try {
+    const events = sseEvents(await (await ask(token, question('openai/fail'))).text());
+    const err = events.find((e) => e.event === 'error');
+    assert.ok(err, 'error event sent');
+    assert.match(err.data.message, /upstream exploded/);
+  } finally {
+    upstreamLog.failAll = false;
+  }
 });
 
 test('a client that disconnects cancels the upstream request', async () => {

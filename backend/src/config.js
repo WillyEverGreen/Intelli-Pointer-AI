@@ -53,7 +53,7 @@ export const config = {
 
   gemini: {
     apiKey: env.GEMINI_API_KEY || '',
-    models: list(env.GEMINI_MODELS, ['gemini-flash-latest', 'gemini-flash-lite-latest']),
+    models: list(env.GEMINI_MODELS, ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite']),
   },
 
   // Any OpenAI-compatible endpoint (e.g. a 9Router instance, OpenRouter, Groq).
