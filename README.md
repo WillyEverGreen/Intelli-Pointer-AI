@@ -6,6 +6,8 @@ Mark anything on your Windows screen, ask an AI about it, and get a streamed ans
 - **Cloud API** (`backend/`, Node.js + Express): Firebase login check, per-user quota, request validation, AI provider routing, SSE streaming.
 - **Firebase** (free Spark plan): Authentication for users, Firestore for per-user usage counters.
 
+**Team** (Cloud Computing Lab mini-project, Department of Computer Engineering, Fr. Conceicao Rodrigues College of Engineering): Ahamed Wafiq (10705), Sai Balkawade (10707), C. Jace Jaison (10711).
+
 > **Documentation:** [Deployment guide](docs/DEPLOYMENT.md) · [Security design and threat model](docs/SECURITY.md) · [Project report](docs/REPORT.md) (PDF: `docs/IntelliPointer-Report.pdf`) · [Architecture diagram](docs/architecture.png) · CI: `.github/workflows/ci.yml`
 >
 > Developer guide for the desktop app (code layout, extending, performance budget): [`desktop/README.md`](desktop/README.md).
@@ -262,3 +264,7 @@ cd desktop && npx electron test/panel.e2e.js path\to\image.png   # real OCR + re
 - The Ask bar relies on apps exposing their selection through Windows UI Automation. Edge, Chrome, Word, Notepad and most standard apps do. For apps that don't, select the text and press **Alt+Shift+A**, which falls back to a Ctrl+C round-trip.
 - The selection helper is a small PowerShell + C# process (`desktop/src/main/native/selection-helper.ps1`) started with `-ExecutionPolicy Bypass` for that one process only. Some antivirus tools may flag a global mouse hook. Turn the bar off in Settings if that's a problem; the hotkey still works.
 - The free Render tier sleeps when idle (see the Render section above).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
