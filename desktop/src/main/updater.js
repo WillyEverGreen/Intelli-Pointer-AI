@@ -38,6 +38,7 @@ function init({ onStateChange } = {}) {
   autoUpdater.logger = { info: () => {}, warn: (m) => log('update.warn', { message: String(m) }), error: (m) => log('update.error', { message: String(m) }), debug: () => {} };
 
   autoUpdater.on('checking-for-update', () => set({ status: 'checking', message: 'Checking for updates…' }));
+  autoUpdater.on('update-not-available', () => log('update.current', { version: app.getVersion() }));
   autoUpdater.on('update-not-available', () => set({ status: 'current', message: 'You have the latest version.' }));
   autoUpdater.on('update-available', (info) => {
     log('update.available', { version: info.version });

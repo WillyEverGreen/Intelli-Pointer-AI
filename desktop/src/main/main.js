@@ -672,7 +672,6 @@ app.whenReady().then(async () => {
     createBubble();
     capture.init();
     registerIpc();
-  updater.init({ onStateChange: updateTrayMenu });
     await runSmokeTest(SMOKE_TEST_OUT);
     return;
   }
@@ -688,6 +687,7 @@ app.whenReady().then(async () => {
   capture.init();
   createTray();
   registerIpc();
+  updater.init({ onStateChange: updateTrayMenu }); // installed builds only
   if (failed.length) {
     new Notification({ title: 'IntelliPointer', body: `Shortcut already used by another app: ${failed.join(', ')}. Change it in Settings.` }).show();
   }
