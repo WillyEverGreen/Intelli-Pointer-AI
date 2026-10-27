@@ -297,7 +297,7 @@ Each answer shows `capture · OCR · upload size · first token · total`. Every
 
 ```bash
 cd backend && npm test                        # validation + auth enforcement (13 tests)
-cd backend && npm run test:emulator           # REAL Firebase Auth + Firestore emulators: tokens, atomic quotas, rules, SSE (14 tests incl. model fallback; needs Java 21+)
+cd backend && npm run test:emulator           # REAL Firebase Auth + Firestore emulators: tokens, atomic quotas, rules, SSE (14 tests incl. model fallback; needs Java 21+, fetches firebase-tools via npx on first run)
 cd backend && npm run verify:deployment -- --url https://<your-api> --firebase-key <key> --email <e> --password <p>   # checks a live deployment, writes evidence
 cd desktop && npm test                        # SSE parser + compiled native helper
 cd desktop && npx electron test/overlay.e2e.js   # overlay: drawing, move, undo, blur, crops at 1.5x DPI
