@@ -4,23 +4,23 @@
       <path d="M0 0 L10 5 L0 10 z" fill="#1f2937"/>
     </marker>
     <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#0b63ce"/>
+      <path d="M0 0 L10 5 L0 10 z" fill="#111111"/>
     </marker>
     <style>
       .zone { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; }
       .zone-title { font-size: 15px; font-weight: 600; fill: #334155; }
       .box { fill: #ffffff; stroke: #94a3b8; stroke-width: 1.2; }
-      .api { fill: #eff6ff; stroke: #0b63ce; stroke-width: 1.6; }
+      .api { fill: #f3f4f6; stroke: #111111; stroke-width: 1.6; }
       .svc { fill: #fff7ed; stroke: #ea580c; stroke-width: 1.4; }
       .ext { fill: #f0fdf4; stroke: #16a34a; stroke-width: 1.4; }
       .t { font-size: 14px; font-weight: 600; fill: #0f172a; }
       .s { font-size: 12px; fill: #475569; }
-      .step { font-size: 12px; fill: #1e3a8a; }
+      .step { font-size: 12px; fill: #111111; }
       .lbl { font-size: 12px; fill: #1f2937; }
-      .lblb { font-size: 12px; fill: #0b63ce; font-weight: 600; }
+      .lblb { font-size: 12px; fill: #111111; font-weight: 600; }
       .line { stroke: #1f2937; stroke-width: 1.6; fill: none; }
-      .lineb { stroke: #0b63ce; stroke-width: 2; fill: none; }
-      .num { fill: #0b63ce; }
+      .lineb { stroke: #111111; stroke-width: 2; fill: none; }
+      .num { fill: #111111; }
       .numt { font-size: 12px; font-weight: 700; fill: #fff; text-anchor: middle; }
     </style>
   </defs>
@@ -137,5 +137,5 @@
   <circle class="num" cx="875" cy="402" r="11"/><text class="numt" x="875" y="406">5</text>
 
     <text class="lbl" x="560" y="42">0  sign in: Firebase REST (email + password) → ID token + refresh token</text>
-    <text class="lbl" x="20" y="688" fill="#475569"><tspan font-weight="700" fill="#0b63ce">0</tspan> sign in   <tspan font-weight="700" fill="#0b63ce">1</tspan> POST /v1/ask over HTTPS, Bearer ID token (crop + OCR text + question)   <tspan font-weight="700" fill="#0b63ce">2</tspan> answer streamed back as Server-Sent Events (dashed)   <tspan font-weight="700" fill="#0b63ce">3</tspan> verify token   <tspan font-weight="700" fill="#0b63ce">4</tspan> quota transaction   <tspan font-weight="700" fill="#0b63ce">5</tspan> model call</text>
+    <text class="lbl" x="20" y="688" fill="#475569"><tspan font-weight="700" fill="#111111">0</tspan> sign in   <tspan font-weight="700" fill="#111111">1</tspan> POST /v1/ask over HTTPS, Bearer ID token (crop + OCR text + question)   <tspan font-weight="700" fill="#111111">2</tspan> answer streamed back as Server-Sent Events (dashed)   <tspan font-weight="700" fill="#111111">3</tspan> verify token   <tspan font-weight="700" fill="#111111">4</tspan> quota transaction   <tspan font-weight="700" fill="#111111">5</tspan> model call</text>
 </svg>

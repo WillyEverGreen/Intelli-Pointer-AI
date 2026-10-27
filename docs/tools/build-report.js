@@ -23,7 +23,7 @@ const CSS = `
   blockquote { margin: 8pt 0; padding: 4pt 10pt; border-left: 3px solid #9ca3af; color: #374151; background: #f9fafb; }
   img { max-width: 100%; display: block; margin: 8pt auto; page-break-inside: avoid; }
   em { color: #4b5563; } hr { border: 0; border-top: 1px solid #e5e7eb; margin: 14pt 0; }
-  a { color: #0b63ce; text-decoration: none; }
+  a { color: inherit; text-decoration: none; }
 `;
 
 app.whenReady().then(async () => {

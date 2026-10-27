@@ -7,7 +7,8 @@
 // common/cover.tex, content/02-abstract.tex, content/03-lists.tex.
 // Generated files (edit the Markdown instead):
 //   content/04-introduction.tex, content/sections/{1-description,2-development,3-results}.tex,
-//   content/05-conclusion.tex, content/06-bibliography.tex, content/07-annexes.tex
+//   content/05-conclusion.tex, content/06-bibliography.tex
+// (the Results chapter also contains the register of experiments from EXPERIMENTS.md)
 const fs = require('node:fs');
 const path = require('node:path');
 const { marked } = require(path.join(__dirname, '..', '..', 'desktop', 'node_modules', 'marked'));
@@ -151,7 +152,7 @@ function renderBlocks(tokens, ctx) {
         const title = stripNumber(plain(t.tokens));
         ctx.heading = title;
         ctx.tableCount = 0;
-        const cmd = { 2: 'section', 3: 'subsection', 4: 'subsubsection' }[t.depth] || 'paragraph';
+        const cmd = { 2: 'section', 3: 'subsection', 4: 'subsubsection' }[t.depth + (ctx.shift || 0)] || 'paragraph';
         parts.push(`\\${cmd}{${escapeText(title)}}`);
         break;
       }
@@ -232,7 +233,17 @@ const byTitle = (re) => report.filter((s) => re.test(s.title));
 write('content/04-introduction.tex', chapter('Introduction', 'ch:intro', byNumber(1, 2)));
 write('content/sections/1-description.tex', chapter('Project Description and Design', 'ch:design', byNumber(3, 4, 5)));
 write('content/sections/2-development.tex', chapter('Development and Security', 'ch:development', byNumber(6, 7)));
-write('content/sections/3-results.tex', chapter('Testing and Results', 'ch:results', byNumber(8)));
+// The Results chapter ends with the register of every experiment, by name.
+{
+  const ctx = { heading: '', tableCount: 0, figures, shift: 1 }; // headings one level deeper
+  const exp = splitSections(fs.readFileSync(path.join(docs, 'EXPERIMENTS.md'), 'utf8'));
+  const register = [
+    '\\section{Register of experiments}\\label{sec:experiments}',
+    renderBlocks(exp[0].tokens.filter((t) => t.type === 'paragraph'), ctx),
+    exp.slice(1).map((s) => renderBlocks(s.tokens, ctx)).join('\n\n'),
+  ].join('\n\n');
+  write('content/sections/3-results.tex', `${chapter('Testing and Results', 'ch:results', byNumber(8))}\n${register}\n`);
+}
 write('content/05-conclusion.tex', chapter('Conclusions and Future Work', 'ch:conclusion', [...byNumber(9), ...byNumber(10)]));
 
 // Bibliography from the numbered list in section 11.
@@ -241,25 +252,6 @@ write('content/05-conclusion.tex', chapter('Conclusions and Future Work', 'ch:co
   const list = sec.tokens.find((t) => t.type === 'list');
   const items = list.items.map((it, i) => `\\bibitem{ref${i + 1}} ${inline(it.tokens[0].tokens)}`);
   write('content/06-bibliography.tex', `${header('docs/REPORT.md')}\\begin{thebibliography}{99}\n${items.join('\n')}\n\\end{thebibliography}\n`);
-}
-
-// Annexes: rubric map, appendices, and the register of experiments.
-{
-  const ctx = { heading: '', tableCount: 0, figures };
-  const rubric = byTitle(/^Where each rubric criterion/);
-  const appendices = byTitle(/^Appendix/);
-  const exp = splitSections(fs.readFileSync(path.join(docs, 'EXPERIMENTS.md'), 'utf8'));
-  const expIntro = exp[0].tokens.filter((t) => t.type === 'paragraph');
-  const expBody = exp.slice(1).map((s) => renderBlocks(s.tokens, ctx)).join('\n\n');
-  const text = [
-    `${header('docs/REPORT.md and docs/EXPERIMENTS.md')}\\chapter{Annexes}\\label{ch:annexes}`,
-    renderBlocks(rubric.flatMap((s) => s.tokens), ctx),
-    renderBlocks(appendices.flatMap((s) => s.tokens), ctx),
-    `\\section{Register of experiments}\\label{sec:experiments}`,
-    renderBlocks(expIntro, ctx),
-    expBody,
-  ].join('\n\n');
-  write('content/07-annexes.tex', `${text}\n`);
 }
 
 // Copy the figures next to the LaTeX sources so the folder is self-contained (Overleaf).
