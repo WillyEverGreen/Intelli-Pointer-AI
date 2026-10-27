@@ -81,6 +81,9 @@
     if (!models.length) {
       const why = errors.length ? errors.map((e) => `${e.source}: ${e.message}`).join(' ') : 'Add a Gemini or Groq key, or a local server, to choose models.';
       banner(why, { label: 'Settings', onClick: openSettings });
+    } else if (errors.length) {
+      // One source failing (e.g. signed out of IntelliPointer Cloud) must not be silent.
+      banner(errors.map((e) => `${e.source}: ${e.message}`).join(' '), { label: 'Settings', onClick: openSettings });
     } else {
       banner('');
     }
