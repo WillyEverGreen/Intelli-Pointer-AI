@@ -1,14 +1,65 @@
-# IntelliPointer AI
+<p align="center">
+  <img src="docs/assets/icon.png" width="96" alt="IntelliPointer AI icon">
+</p>
 
-Mark anything on your Windows screen, ask an AI about it, and get a streamed answer in a floating panel. You never have to take a screenshot, open a chatbot, paste and re-explain.
+<h1 align="center">IntelliPointer AI</h1>
 
-- **Desktop app** (`desktop/`, Electron): global hotkey, frozen-screen selection overlay, drawing tools, local OCR, floating composer + response panel.
-- **Cloud API** (`backend/`, Node.js + Express): Firebase login check, per-user quota, request validation, AI provider routing, SSE streaming.
-- **Firebase** (free Spark plan): Authentication for users, Firestore for per-user usage counters.
+<p align="center">
+  <b>Mark anything on your screen, ask an AI about it, get a streamed answer.</b><br>
+  A Windows desktop assistant backed by a secure cloud API (Firebase + Node.js + Gemini).
+</p>
 
-**Team** (Cloud Computing Lab mini-project, Department of Computer Engineering, Fr. Conceicao Rodrigues College of Engineering): Ahamed Wafiq (10705), Sai Balkawade (10707), C. Jace Jaison (10711).
+<p align="center">
+  <a href="https://github.com/WillyEverGreen/Intelli-Pointer-AI/actions"><img alt="CI" src="https://github.com/WillyEverGreen/Intelli-Pointer-AI/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue">
+  <img alt="Node 22" src="https://img.shields.io/badge/node-%E2%89%A522-339933">
+  <img alt="Electron" src="https://img.shields.io/badge/desktop-Electron-47848f">
+  <img alt="Firebase" src="https://img.shields.io/badge/cloud-Firebase%20%2B%20Render-ffca28">
+</p>
 
-> **Documentation:** [Deployment guide](docs/DEPLOYMENT.md) · [Security design and threat model](docs/SECURITY.md) · [Project report](docs/REPORT.md) (PDF: `docs/IntelliPointer-Report.pdf`) · [Architecture diagram](docs/architecture.png) · CI: `.github/workflows/ci.yml`
+---
+
+## Overview
+
+You never have to take a screenshot, open a chatbot, paste and re-explain. Press a shortcut, the screen freezes, you mark one or more regions, local OCR reads them, and a floating panel streams the answer.
+
+**Cloud Computing Lab mini-project** · Department of Computer Engineering · Fr. Conceicao Rodrigues College of Engineering, Mumbai · Academic year 2026-2027
+
+| | |
+|---|---|
+| **Guide** | Dr. Vijay Shelke |
+| **Team** | Ahamed Wafiq (10705) · Sai Balkawade (10707) · C. Jace Jaison (10711) |
+| **Report** | [PDF (LaTeX)](docs/IntelliPointer-Report-LaTeX.pdf) · [PDF (simple)](docs/IntelliPointer-Report.pdf) · [source](docs/REPORT.md) |
+
+## Cloud services used
+
+| Service | Role |
+|---|---|
+| **Firebase Authentication** | Email/password sign-up and login; issues the 1-hour ID token the API verifies (with revocation checks) |
+| **Cloud Firestore** | Per-user, per-day usage counters only (`usage/{uid}_{day}`); security rules deny every direct client access |
+| **Google Gemini API** | Vision + streaming + web-search grounding; automatic fallback between models on rate limits |
+| **Render** (or Google Cloud Run) | Hosts the Node.js/Express API; secrets live in the host's environment, never in the app or the repo |
+
+## Repository layout
+
+```
+.
+├── backend/            Node.js + Express API (auth, quotas, validation, providers, SSE)
+│   ├── src/            server, auth, quota, validate, firebase, providers/
+│   ├── test/           unit tests + integration tests on the real Firebase emulators
+│   └── scripts/        verify-deployment, check-env, service-account-to-env
+├── desktop/            Electron app (overlay, panel, OCR, native selection helper)
+│   ├── src/            main/, renderer/, preload/
+│   ├── test/           unit and Electron end-to-end tests
+│   └── scripts/        installer, icon and helper builds
+├── firebase/           Firestore security rules (deny all clients)
+├── docs/               Report (LaTeX + PDF), security, deployment, diagrams, evidence
+├── .github/workflows/  CI: tests, emulator tests, audit, container build
+├── render.yaml         One-click Render blueprint
+└── Update IntelliPointer.cmd   Build, test and install the Windows app
+```
+
+> **Documentation:** [Deployment guide](docs/DEPLOYMENT.md) · [Security design and threat model](docs/SECURITY.md) · [Experiments register](docs/EXPERIMENTS.md) · [Deployment evidence](docs/evidence) · [Architecture diagram](docs/architecture.png)
 >
 > Developer guide for the desktop app (code layout, extending, performance budget): [`desktop/README.md`](desktop/README.md).
 
@@ -187,7 +238,7 @@ Every variable is documented in [`backend/.env.example`](backend/.env.example). 
 |---|---|
 | `FIREBASE_PROJECT_ID` | Required. Used to verify user ID tokens. |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Enables Firestore quotas. Without it, quotas are kept in memory and reset on restart. |
-| `GEMINI_API_KEY`, `GEMINI_MODELS` | Gemini provider. Defaults to `gemini-flash-latest,gemini-flash-lite-latest`. |
+| `GEMINI_API_KEY`, `GEMINI_MODELS` | Gemini provider. Defaults to `gemini-flash-latest`, `gemini-flash-lite-latest`, `gemini-2.5-flash`, `gemini-2.5-flash-lite`; if one is rate limited the API automatically tries the next. |
 | `OPENAI_COMPAT_BASE_URL`, `_API_KEY`, `_MODELS`, `_LABEL` | Optional second provider, e.g. a 9Router instance. Mark image-capable models with `:vision`. |
 | `DAILY_REQUEST_LIMIT`, `RATE_LIMIT_PER_MINUTE` | Per-user quota and rate limit. |
 | `AUTH_DISABLED` | Development only. The server refuses to start with it when `NODE_ENV=production` or bound to a non-loopback host. |
@@ -246,7 +297,7 @@ Each answer shows `capture · OCR · upload size · first token · total`. Every
 
 ```bash
 cd backend && npm test                        # validation + auth enforcement (13 tests)
-cd backend && npm run test:emulator           # REAL Firebase Auth + Firestore emulators: tokens, atomic quotas, rules, SSE (13 tests; needs Java 21+)
+cd backend && npm run test:emulator           # REAL Firebase Auth + Firestore emulators: tokens, atomic quotas, rules, SSE (14 tests incl. model fallback; needs Java 21+)
 cd backend && npm run verify:deployment -- --url https://<your-api> --firebase-key <key> --email <e> --password <p>   # checks a live deployment, writes evidence
 cd desktop && npm test                        # SSE parser + compiled native helper
 cd desktop && npx electron test/overlay.e2e.js   # overlay: drawing, move, undo, blur, crops at 1.5x DPI
