@@ -61,7 +61,8 @@
   setTool('rect');
   setColor(color);
 
-  document.getElementById('tools').addEventListener('click', (e) => {
+  // All tool buttons (selection shapes and annotations) live in different groups.
+  toolbar.addEventListener('click', (e) => {
     const b = e.target.closest('[data-tool]');
     if (b) setTool(b.dataset.tool);
   });
@@ -351,13 +352,20 @@
     drag = { kind: 'draw', start: [x, y], points: [[x, y]], preview: null };
   });
 
-  view.addEventListener('pointermove', (e) => {
-    const [, y] = pt(e);
-    // Keep the toolbar out of the way of where the user is working.
-    if (y < 90 && !toolbar.classList.contains('bottom')) toolbar.classList.add('bottom');
-    else if (y > innerHeight - 90 && toolbar.classList.contains('bottom')) toolbar.classList.remove('bottom');
-    updateDrag(e);
+  // The toolbar only moves to the other edge while the user is dragging a
+  // shape into it (never because the cursor merely passes by on its way to a
+  // button), and then stays put.
+  function dodgeToolbar(x, y) {
+    const r = toolbar.getBoundingClientRect();
+    const pad = 40;
+    if (x < r.left - pad || x > r.right + pad || y < r.top - pad || y > r.bottom + pad) return;
+    toolbar.classList.toggle('bottom');
+  }
+
+  window.addEventListener('pointermove', (e) => {
+    if (drag && drag.kind === 'draw') dodgeToolbar(e.clientX, e.clientY);
   });
+  view.addEventListener('pointermove', updateDrag);
 
   function updateDrag(e) {
     if (!drag) return;

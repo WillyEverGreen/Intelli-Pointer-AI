@@ -94,6 +94,35 @@ app.whenReady().then(async () => {
     const st = await wc.executeJavaScript('window.__overlayState()');
     console.log(`  [${label}] tool=${st.tool}`, st.ops.map((o) => `${o.type}:${o.shape || ''}@${Math.round(o.x ?? o.x1 ?? o.points?.[0]?.[0])},${Math.round(o.y ?? o.y1 ?? o.points?.[0]?.[1])}`).join(' '));
   };
+  // Every toolbar button works with a real mouse click.
+  const center = (sel) => wc.executeJavaScript(`(() => { const r = document.querySelector('${sel}').getBoundingClientRect(); return [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)]; })()`);
+  const click = async (sel) => {
+    const [cx, cy] = await center(sel);
+    wc.sendInputEvent({ type: 'mouseMove', x: cx, y: cy });
+    wc.sendInputEvent({ type: 'mouseDown', x: cx, y: cy, button: 'left', clickCount: 1 });
+    wc.sendInputEvent({ type: 'mouseUp', x: cx, y: cy, button: 'left', clickCount: 1 });
+    await wait(60);
+  };
+  for (const t of ['rect', 'square', 'ellipse', 'lasso', 'pen', 'arrow', 'highlight', 'blur']) {
+    await click(`[data-tool="${t}"]`);
+    check((await wc.executeJavaScript('window.__overlayState()')).tool === t, `clicking the ${t} button selects that tool`);
+  }
+  await click('[data-tool="rect"]');
+  const toolbarSide = () => wc.executeJavaScript("document.getElementById('toolbar').classList.contains('bottom')");
+  // Moving the cursor up to a toolbar button must not make the toolbar jump away.
+  const [bx, by] = await center('[data-tool="pen"]');
+  for (let y = by + 80; y >= by; y -= 8) {
+    wc.sendInputEvent({ type: 'mouseMove', x: bx, y });
+    await wait(10);
+  }
+  check(!(await toolbarSide()), 'toolbar stays at the top while the cursor travels to a button');
+  // Dragging a shape into the toolbar moves it out of the way, once.
+  const rect = await wc.executeJavaScript("(() => { const r = document.getElementById('toolbar').getBoundingClientRect(); return { l: r.left, t: r.top, b: r.bottom, w: r.width }; })()");
+  await drag(wc, 300, 500, Math.round(rect.l + rect.w / 2), Math.round(rect.t + 10));
+  check(await toolbarSide(), 'toolbar moves to the bottom when a drag reaches it');
+  await click('#clear');
+  await wc.executeJavaScript("document.getElementById('toolbar').classList.remove('bottom')");
+
   await drag(wc, 100, 150, 400, 350); // rectangle region
   await state('rectangle region');
   await key(wc, 'E');
