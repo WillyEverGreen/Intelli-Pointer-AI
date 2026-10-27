@@ -169,8 +169,11 @@ function renderBlocks(tokens, ctx) {
             i = j;
           }
           const file = path.basename(only.href);
-          ctx.figures.add(file);
-          parts.push(`\\begin{figure}[htbp]\n\\centering\n\\includegraphics[width=\\linewidth]{${file}}\n\\caption{${escapeText(caption)}}\n\\end{figure}`);
+          ctx.figures.add(only.href);
+          // An optional title such as "w=0.42" sets the width as a fraction of the text width.
+          const frac = /^w=(0?\.\d+)$/.exec(only.title || '');
+          const width = frac ? `${frac[1]}\\linewidth` : '\\linewidth';
+          parts.push(`\\begin{figure}[htbp]\n\\centering\n\\includegraphics[width=${width}]{${file}}\n\\caption{${escapeText(caption)}}\n\\end{figure}`);
         } else {
           parts.push(inline(t.tokens));
         }
@@ -257,7 +260,7 @@ write('content/05-conclusion.tex', chapter('Conclusions and Future Work', 'ch:co
 // Copy the figures next to the LaTeX sources so the folder is self-contained (Overleaf).
 fs.mkdirSync(path.join(out, 'figures'), { recursive: true });
 for (const f of new Set([...figures, 'architecture.png', 'sequence.png'])) {
-  fs.copyFileSync(path.join(docs, f), path.join(out, 'figures', f));
+  fs.copyFileSync(path.join(docs, f), path.join(out, 'figures', path.basename(f)));
 }
 
 if (unmapped.size) console.warn(`WARNING: characters dropped (no LaTeX mapping): ${[...unmapped].join(' ')}`);

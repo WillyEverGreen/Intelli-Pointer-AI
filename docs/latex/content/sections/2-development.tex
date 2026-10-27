@@ -64,6 +64,32 @@ Privacy & A notice before every send, a blur tool, a local-only mode, nothing wr
 \end{longtable}
 }
 
+The next four figures follow one worked example: a student runs a Python script that fails with a \texttt{TypeError}, and asks the application about the error without leaving the editor.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.9\linewidth]{1-select-region.png}
+\caption{The screen freezes at once and the error traceback is marked with the rectangle tool. The toolbar offers the other shapes, pen, arrow, blur and the colours.}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.36\linewidth]{2-captured-and-ocr.png}
+\caption{The floating panel shows the captured region and the text that local OCR read from it. Before sending, it states exactly what will leave the PC: one image and the OCR text.}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.9\linewidth]{3-ai-answer.png}
+\caption{The answer streams into the panel beside the original screen: the cause of the error and the corrected code. This run used the Gemini Flash model through the cloud API.}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.36\linewidth]{4-settings-models.png}
+\caption{Settings, Models: the user chooses where answers come from (own Gemini or Groq key, a local server, or the IntelliPointer Cloud with sign-in and a daily quota).}
+\end{figure}
+
 \subsection{Performance engineering}
 
 Measured on a 1920\ensuremath{\times}1080 display at 125 \% scaling.

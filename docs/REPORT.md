@@ -236,6 +236,24 @@ Key design points: Firebase tokens are verified on every request with revocation
 | Model sources | Gemini or Groq with the user's own key, any OpenAI-compatible server (9Router, Ollama, LM Studio), or this project's cloud API; a model menu with image support and measured speed |
 | Privacy | A notice before every send, a blur tool, a local-only mode, nothing written to disk |
 
+The next four figures follow one worked example: a student runs a Python script that fails with a `TypeError`, and asks the application about the error without leaving the editor.
+
+![Selecting the region](screenshots/1-select-region.png "w=0.9")
+
+*Figure 3. The screen freezes at once and the error traceback is marked with the rectangle tool. The toolbar offers the other shapes, pen, arrow, blur and the colours.*
+
+![Captured region and local OCR](screenshots/2-captured-and-ocr.png "w=0.36")
+
+*Figure 4. The floating panel shows the captured region and the text that local OCR read from it. Before sending, it states exactly what will leave the PC: one image and the OCR text.*
+
+![Streamed answer beside the original screen](screenshots/3-ai-answer.png "w=0.9")
+
+*Figure 5. The answer streams into the panel beside the original screen: the cause of the error and the corrected code. This run used the Gemini Flash model through the cloud API.*
+
+![Model sources in Settings](screenshots/4-settings-models.png "w=0.36")
+
+*Figure 6. Settings, Models: the user chooses where answers come from (own Gemini or Groq key, a local server, or the IntelliPointer Cloud with sign-in and a daily quota).*
+
 ### 6.4 Performance engineering
 
 Measured on a 1920×1080 display at 125 % scaling.

@@ -29,7 +29,7 @@ const CSS = `
 app.whenReady().then(async () => {
   let md = fs.readFileSync(path.join(docs, 'REPORT.md'), 'utf8');
   // Embed images so the HTML and PDF are self-contained.
-  md = md.replace(/!\[([^\]]*)\]\(([^)]+\.png)\)/g, (_m, alt, file) => {
+  md = md.replace(/!\[([^\]]*)\]\(([^)\s]+\.png)(?:\s+\"[^\"]*\")?\)/g, (_m, alt, file) => {
     const data = fs.readFileSync(path.join(docs, file)).toString('base64');
     return `![${alt}](data:image/png;base64,${data})`;
   });
@@ -41,7 +41,7 @@ app.whenReady().then(async () => {
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>IntelliPointer AI report</title><style>${CSS}</style></head><body>${logo}${marked.parse(md, { gfm: true })}</body></html>`;
   fs.writeFileSync(path.join(docs, 'IntelliPointer-Report.html'), html); // git-ignored
   const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });
-  await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  await win.loadFile(path.join(docs, 'IntelliPointer-Report.html')); // a data: URL is capped at 2 MB
   const pdf = await win.webContents.printToPDF({ pageSize: 'A4', printBackground: true, preferCSSPageSize: true });
   fs.writeFileSync(path.join(docs, 'IntelliPointer-Report.pdf'), pdf);
   console.log(`wrote IntelliPointer-Report.pdf (${Math.round(pdf.length / 1024)} KB)`);
