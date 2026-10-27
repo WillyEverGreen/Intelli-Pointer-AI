@@ -7,7 +7,8 @@ Fr. Conceicao Rodrigues College of Engineering, Department of Computer Engineeri
 |---|---|
 | Students (roll no.) | Ahamed Wafiq (10705), Sai Balkawade (10707), C. Jace Jaison (10711) |
 | Project title | IntelliPointer AI: A Screen-Aware AI Assistant on a Secure Cloud Backend |
-| Date of submission | _fill in_ |
+| Guide | Prof. Vijay Shelke, Department of Computer Engineering |
+| Date of submission | 27 October 2026 |
 | Source code | _repository link_ |
 
 > **How to finish this report.** Sections marked _fill in_ or "to be completed after deployment" need your own details: names, the evidence produced by `npm run verify:deployment` on your deployed service, and screenshots. Everything else describes the system as built and tested. Rebuild the PDF with `npm run report` in `desktop/`.
