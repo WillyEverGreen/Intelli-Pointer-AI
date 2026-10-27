@@ -78,7 +78,8 @@ app.whenReady().then(async () => {
     keys: { gemini: { set: true, hint: '…a1b2' }, groq: { set: false, hint: '' }, local: { set: true, hint: '…9f3c' } },
   });
   h('providers:status', providerStatus);
-  h('providers:save', providerStatus);
+  let providerSaves = 0;
+  h('providers:save', () => { providerSaves += 1; return providerStatus(); });
   h('providers:fetchModels', () => []);
   h('hotkeys:check', (_e, acc) => (acc === 'Ctrl+Alt+Q' ? { ok: false, reason: 'Another app already uses this shortcut.' } : { ok: true }));
   for (const ch of ['usage:get', 'ask:cancel', 'ask:start', 'clipboard:write', 'panel:pin', 'panel:resize', 'panel:hide', 'open:latencyLog', 'open:diagnostics', 'capture:start', 'auth:signIn', 'auth:signOut', 'providers:speedTest']) h(ch, () => null);
@@ -132,6 +133,11 @@ app.whenReady().then(async () => {
   check(sources.join() === 'Gemini,Groq,9Router,IntelliPointer Cloud', `source list (${sources.join(', ')})`);
   const switches = await js(`document.querySelectorAll('.source-row .switch').length`);
   check(switches === 4, 'each source has a show-in-menu switch');
+  // Credentials save themselves when you leave the field (no Save click needed).
+  const savesBefore = providerSaves;
+  await js(`(() => { const el = document.getElementById('s-firebaseApiKey'); el.value = 'AIzaTestKey123'; el.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await wait(400);
+  check(providerSaves > savesBefore, 'a typed credential is saved as soon as the field loses focus');
   await snap('settings-models');
 
   // Settings: Commands

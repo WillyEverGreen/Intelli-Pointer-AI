@@ -245,7 +245,12 @@ window.IPSettingsView = ({ cleanErr, onSaved }) => {
       if (!anyUsed) preselect(p, fetched);
       enabled[p] = true;
       renderModelList(p);
-      if (!fetched.length) setProvStatus(p, 'The server returned no chat models.', true);
+      if (!fetched.length) {
+        setProvStatus(p, 'The server returned no chat models.', true);
+      } else if (opts.apiKey || p === 'local') {
+        // The key just worked: keep it, so it never has to be typed again.
+        if (await save({ quiet: true })) setProvStatus(p, `Loaded ${fetched.length} models. Key saved on this PC.`);
+      }
       return true;
     } catch (err) {
       setProvStatus(p, cleanErr(err), true);
@@ -594,6 +599,13 @@ window.IPSettingsView = ({ cleanErr, onSaved }) => {
       role(p, 'remove').hidden = true;
     });
   }
+  // Credentials are never left as an unsaved draft: leaving the field saves it.
+  const autosave = (el) => el.addEventListener('change', () => {
+    if (el.value.trim()) save({ quiet: true }).then((ok) => { if (ok) $('settings-msg').textContent = 'Saved'; });
+  });
+  for (const p of PROVS) autosave(role(p, 'key'));
+  autosave($('s-backendUrl'));
+  autosave($('s-firebaseApiKey'));
   role('local', 'url').addEventListener('input', renderSources);
   role('local', 'label').addEventListener('input', renderSources);
   // A preset may list several URLs (9Router: production port, then dev port);
