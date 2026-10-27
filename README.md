@@ -31,6 +31,22 @@ You never have to take a screenshot, open a chatbot, paste and re-explain. Press
 | **Team** | Ahamed Wafiq (10705) · Sai Balkawade (10707) · C. Jace Jaison (10711) |
 | **Report** | [PDF (LaTeX)](docs/IntelliPointer-Report-LaTeX.pdf) · [PDF (simple)](docs/IntelliPointer-Report.pdf) · [source](docs/REPORT.md) |
 
+## Screenshots: one use case, start to finish
+
+A student runs a Python script and gets a `TypeError`. Instead of copying the error into a chatbot, they press the shortcut.
+
+| 1. Mark the problem | 2. Local OCR reads it |
+| :---: | :---: |
+| <img src="docs/screenshots/1-select-region.png" alt="Frozen screen with the error traceback marked"> | <img src="docs/screenshots/2-captured-and-ocr.png" width="300" alt="Panel showing the captured region and OCR result"> |
+| The screen freezes instantly. The traceback is marked with the rectangle tool (ellipse, lasso, pen, arrow and blur are also there). | The crop is read on this PC. The panel states exactly what will be sent: 1 image and the OCR text. |
+
+| 3. Streamed answer | 4. Models and cloud sign-in |
+| :---: | :---: |
+| <img src="docs/screenshots/3-ai-answer.png" alt="AI answer streaming next to the original screen"> | <img src="docs/screenshots/4-settings-models.png" width="300" alt="Settings with the IntelliPointer Cloud source"> |
+| "Fix error" returns the cause and corrected code beside the original screen. This answer came from the Gemini Flash model through the backend. | Pick a model source: your own Gemini or Groq key, a local server, or the IntelliPointer Cloud (Firebase sign-in, daily quota). |
+
+The images are generated from the real UI by `desktop/scripts/screenshots.js` against a running backend (`cd desktop && npx electron scripts/screenshots.js`). The "screen" is a stand-in editor window, so no personal desktop is shown.
+
 ## Cloud services used
 
 | Service | Role |

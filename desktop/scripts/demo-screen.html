@@ -1,0 +1,70 @@
+<!doctype html>
+<!-- A stand-in "desktop" for the README screenshots: a code editor with a failing run. -->
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { width: 1280px; height: 720px; overflow: hidden; background: #1e1e1e; color: #d4d4d4; font: 13px "Segoe UI", sans-serif; }
+  .title { height: 34px; background: #323233; display: flex; align-items: center; padding: 0 14px; color: #ccc; font-size: 12px; gap: 18px; }
+  .title b { font-weight: 400; color: #999; }
+  .main { display: flex; height: 686px; }
+  .side { width: 210px; background: #252526; padding: 12px 0; font-size: 12.5px; }
+  .side h4 { font-size: 11px; letter-spacing: .08em; color: #9a9a9a; padding: 0 16px 8px; font-weight: 600; }
+  .side div { padding: 4px 16px; color: #ccc; }
+  .side .on { background: #37373d; color: #fff; }
+  .col { flex: 1; display: flex; flex-direction: column; }
+  .tabs { height: 34px; background: #2d2d2d; display: flex; }
+  .tabs span { padding: 9px 18px; font-size: 12.5px; color: #999; }
+  .tabs .on { background: #1e1e1e; color: #fff; border-top: 1px solid #0078d4; }
+  .code { height: 292px; padding: 14px 0; font: 14px/22px Consolas, "Cascadia Mono", monospace; display: flex; }
+  .ln { width: 56px; text-align: right; padding-right: 18px; color: #6e7681; }
+  .kw { color: #569cd6; } .fn { color: #dcdcaa; } .st { color: #ce9178; } .cm { color: #6a9955; } .nm { color: #b5cea8; } .ty { color: #4ec9b0; }
+  .term { flex: 1; border-top: 1px solid #3c3c3c; background: #181818; }
+  .term .hdr { height: 32px; display: flex; gap: 22px; padding: 8px 18px; font-size: 11.5px; color: #999; letter-spacing: .04em; }
+  .term .hdr .on { color: #fff; border-bottom: 1px solid #0078d4; }
+  #trace { padding: 6px 22px; font: 14px/22px Consolas, "Cascadia Mono", monospace; color: #cccccc; }
+  #trace .err { color: #f48771; }
+  #trace .dim { color: #8b8b8b; }
+  .status { height: 22px; background: #007acc; color: #fff; font-size: 12px; padding: 3px 14px; }
+</style>
+<div class="title"><span>File</span><span>Edit</span><span>Selection</span><span>View</span><span>Run</span><b>report_stats.py — lab-notebook — Visual Studio Code</b></div>
+<div class="main">
+  <div class="side">
+    <h4>EXPLORER</h4>
+    <div>&#9662; lab-notebook</div>
+    <div>&nbsp;&nbsp;data.csv</div>
+    <div class="on">&nbsp;&nbsp;report_stats.py</div>
+    <div>&nbsp;&nbsp;utils.py</div>
+    <div>&nbsp;&nbsp;requirements.txt</div>
+  </div>
+  <div class="col">
+    <div class="tabs"><span class="on">report_stats.py</span><span>utils.py</span></div>
+    <div class="code">
+      <div class="ln">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12</div>
+      <div>
+        <span class="kw">import</span> csv<br>
+        <br>
+        <span class="kw">def</span> <span class="fn">average_score</span>(path):<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;scores = []<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">with</span> <span class="fn">open</span>(path) <span class="kw">as</span> f:<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">for</span> row <span class="kw">in</span> csv.<span class="fn">DictReader</span>(f):<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scores.<span class="fn">append</span>(row[<span class="st">"score"</span>])<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">return</span> <span class="fn">sum</span>(scores) / <span class="fn">len</span>(scores)<br>
+        <br>
+        <span class="fn">print</span>(<span class="fn">average_score</span>(<span class="st">"data.csv"</span>))<br>
+        <span class="cm"># expected: a number like 71.5</span>
+      </div>
+    </div>
+    <div class="term">
+      <div class="hdr"><span>PROBLEMS</span><span>OUTPUT</span><span class="on">TERMINAL</span><span>DEBUG CONSOLE</span></div>
+      <div id="trace">
+        <span class="dim">PS C:\lab-notebook&gt; python report_stats.py</span><br>
+        Traceback (most recent call last):<br>
+        &nbsp;&nbsp;File "report_stats.py", line 11, in &lt;module&gt;<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;print(average_score("data.csv"))<br>
+        &nbsp;&nbsp;File "report_stats.py", line 9, in average_score<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;return sum(scores) / len(scores)<br>
+        <span class="err">TypeError: unsupported operand type(s) for +: 'int' and 'str'</span>
+      </div>
+    </div>
+  </div>
+</div>
