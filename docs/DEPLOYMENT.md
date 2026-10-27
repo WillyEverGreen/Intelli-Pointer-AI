@@ -16,6 +16,24 @@ Prerequisites: a Google account, a GitHub account, and a Gemini API key from
 5. **Project settings → General → Web API key.** This is public by design and goes into the desktop app.
 6. Render only: **Project settings → Service accounts → Generate new private key.** Keep the JSON secret. (Not needed on Cloud Run.)
 
+## 1b. Secrets, safely (this project: `intellipointer-10707`)
+
+The Firebase project id is already set in `.firebaserc` and `render.yaml` (it is public). The two secrets never go through chat, git or a screenshot:
+
+```bash
+cd backend
+# 1. Create a NEW Gemini key at https://aistudio.google.com/apikey and paste it
+#    into backend/.env after GEMINI_API_KEY= (the file is git-ignored)
+# 2. Put the downloaded Firebase service-account key into .env, then delete the download:
+npm run env:service-account -- "C:UsersyouDownloadsintellipointer-10707-firebase-adminsdk-xxxx.json" --delete
+# 3. Confirm everything is valid (prints no secret values; asks Google if the key works):
+npm run check:env
+```
+
+For Render, copy the same two values from `backend/.env` into the service's **Environment** page. `.env` is for your PC only and is never deployed.
+
+**If a key is ever exposed** (pasted in chat, logged, committed): revoke it at once in Google AI Studio, create a replacement, update `backend/.env` and Render, run `npm run check:env`, and search the history with `git log --all -p -S"AIza"` to make sure it was never committed. For a leaked service-account key, delete it under Firebase → Project settings → Service accounts → Manage service account permissions → Keys, then generate a new one.
+
 ## 2a. Render (free)
 
 1. Push the repository to GitHub (private is fine).
@@ -24,7 +42,7 @@ Prerequisites: a Google account, a GitHub account, and a Gemini API key from
 
    | Variable | Value |
    |---|---|
-   | `FIREBASE_PROJECT_ID` | from step 1 |
+   | `FIREBASE_PROJECT_ID` | already set in `render.yaml` (`intellipointer-10707`) |
    | `FIREBASE_SERVICE_ACCOUNT_JSON` | the JSON from step 1.6, on one line (or base64) |
    | `GEMINI_API_KEY` | your Gemini key |
 

@@ -14,7 +14,9 @@
     "test": "node --test test/validate.test.js test/server.test.js",
     "test:emulator": "firebase emulators:exec --config ../firebase.json --project demo-intellipointer --only auth,firestore \"node --test test/emulator.test.js\"",
     "test:all": "npm test && npm run test:emulator",
-    "verify:deployment": "node scripts/verify-deployment.mjs"
+    "verify:deployment": "node scripts/verify-deployment.mjs",
+    "check:env": "node scripts/check-env.mjs",
+    "env:service-account": "node scripts/service-account-to-env.mjs"
   },
   "dependencies": {
     "express": "^4.21.2",
