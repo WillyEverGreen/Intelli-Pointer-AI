@@ -26,3 +26,11 @@ node docs/tools/check-latex.js     # structure check (no TeX needed)
 Hand-written files: `main.tex`, `styles.sty`, `common/cover.tex`, `content/01-index.tex`, `content/02-abstract.tex`, `content/03-lists.tex`. Fill in the submission date and academic year on the cover (`common/cover.tex`).
 
 The layout follows the structure of the school template you shared, but uses standard LaTeX packages only (that template's `inf-pucv` class is not available here).
+
+## Compiled with Tectonic (verified)
+
+The PDF `docs/IntelliPointer-Report-LaTeX.pdf` was built with Tectonic 0.17 (a single-file LaTeX engine that fetches packages on demand), installed at `%LOCALAPPDATA%\IntelliPointer-tools\tectonic\tectonic.exe`:
+
+```bash
+cd docs/latex && "$LOCALAPPDATA/IntelliPointer-tools/tectonic/tectonic.exe" -X compile main.tex --outdir <output folder>
+```

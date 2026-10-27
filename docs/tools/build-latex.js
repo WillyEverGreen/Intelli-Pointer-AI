@@ -105,10 +105,14 @@ function renderTable(tok, caption) {
   const n = tok.header.length;
   const weight = tok.header.map((h, c) => {
     const lens = [plain(h.tokens).length, ...tok.rows.map((r) => plain(r[c].tokens).length)];
-    return Math.min(46, Math.max(6, Math.round(lens.reduce((a, b) => a + b, 0) / lens.length)));
+    // Minimum keeps header words like "Likelihood" from overflowing narrow columns.
+    return Math.min(46, Math.max(11, Math.round(lens.reduce((a, b) => a + b, 0) / lens.length)));
   });
   const total = weight.reduce((a, b) => a + b, 0);
-  const spec = weight.map((w) => `>{\\raggedright\\arraybackslash}p{\\dimexpr(\\linewidth-${2 * n}\\tabcolsep)*${(w / total).toFixed(3)}\\relax}`).join('');
+  // \dimexpr only multiplies by integers, so widths are given as integer permille fractions.
+  const permille = weight.map((w) => Math.round((w / total) * 1000));
+  permille[permille.length - 1] += 1000 - permille.reduce((a, b) => a + b, 0);
+  const spec = permille.map((p) => `>{\\raggedright\\arraybackslash}p{\\dimexpr(\\textwidth-${2 * n}\\tabcolsep)*${p}/1000\\relax}`).join('');
   const head = `\\rowcolor{tblhead}${tok.header.map((h) => `\\textbf{${inline(h.tokens)}}`).join(' & ')} \\\\`;
   const rows = tok.rows.map((r) => `${r.map((c) => inline(c.tokens)).join(' & ')} \\\\`).join('\n');
   return [
