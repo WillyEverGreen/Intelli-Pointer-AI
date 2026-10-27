@@ -7,7 +7,7 @@ Fr. Conceicao Rodrigues College of Engineering, Department of Computer Engineeri
 |---|---|
 | Students (roll no.) | Ahamed Wafiq (10705), Sai Balkawade (10707), C. Jace Jaison (10711) |
 | Project title | IntelliPointer AI: A Screen-Aware AI Assistant on a Secure Cloud Backend |
-| Guide | Prof. Vijay Shelke, Department of Computer Engineering |
+| Guide | Dr. Vijay Shelke, Department of Computer Engineering |
 | Date of submission | 27 October 2026 |
 | Source code | _repository link_ |
 
