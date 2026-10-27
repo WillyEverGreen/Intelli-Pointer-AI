@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="1200" height="700" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#1f2937"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0b63ce"/>
+    </marker>
+    <style>
+      .zone { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.5; }
+      .zone-title { font-size: 15px; font-weight: 600; fill: #334155; }
+      .box { fill: #ffffff; stroke: #94a3b8; stroke-width: 1.2; }
+      .api { fill: #eff6ff; stroke: #0b63ce; stroke-width: 1.6; }
+      .svc { fill: #fff7ed; stroke: #ea580c; stroke-width: 1.4; }
+      .ext { fill: #f0fdf4; stroke: #16a34a; stroke-width: 1.4; }
+      .t { font-size: 14px; font-weight: 600; fill: #0f172a; }
+      .s { font-size: 12px; fill: #475569; }
+      .step { font-size: 12px; fill: #1e3a8a; }
+      .lbl { font-size: 12px; fill: #1f2937; }
+      .lblb { font-size: 12px; fill: #0b63ce; font-weight: 600; }
+      .line { stroke: #1f2937; stroke-width: 1.6; fill: none; }
+      .lineb { stroke: #0b63ce; stroke-width: 2; fill: none; }
+      .num { fill: #0b63ce; }
+      .numt { font-size: 12px; font-weight: 700; fill: #fff; text-anchor: middle; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="700" fill="#ffffff"/>
+  <text x="20" y="30" font-size="20" font-weight="700" fill="#0f172a">IntelliPointer AI — system architecture</text>
+
+  <!-- ===== Client zone ===== -->
+  <rect class="zone" x="20" y="60" width="400" height="610" rx="12"/>
+  <text class="zone-title" x="40" y="86">Windows PC (the user's machine)</text>
+
+  <rect class="box" x="40" y="104" width="360" height="64" rx="8"/>
+  <text class="t" x="56" y="128">Selection overlay</text>
+  <text class="s" x="56" y="148">frozen screen · rectangle / ellipse / lasso · pen · blur</text>
+
+  <rect class="box" x="40" y="180" width="360" height="64" rx="8"/>
+  <text class="t" x="56" y="204">Native helper (C#, 16 MB)</text>
+  <text class="s" x="56" y="224">BitBlt screen copy · selected text via UI Automation</text>
+
+  <rect class="box" x="40" y="256" width="360" height="64" rx="8"/>
+  <text class="t" x="56" y="280">Local OCR (tesseract.js)</text>
+  <text class="s" x="56" y="300">text is read on this PC; nothing is uploaded for OCR</text>
+
+  <rect class="box" x="40" y="332" width="360" height="64" rx="8"/>
+  <text class="t" x="56" y="356">Floating panel</text>
+  <text class="s" x="56" y="376">composer · streamed Markdown answer · settings</text>
+
+  <rect class="api" x="40" y="414" width="360" height="104" rx="8"/>
+  <text class="t" x="56" y="438">Main process (Electron)</text>
+  <text class="s" x="56" y="458">global shortcuts · API client · request cancellation</text>
+  <text class="s" x="56" y="476">Firebase session + provider keys encrypted with</text>
+  <text class="s" x="56" y="494">Windows DPAPI · tokens never reach the UI</text>
+
+  <rect class="ext" x="40" y="538" width="360" height="116" rx="8"/>
+  <text class="t" x="56" y="562">Optional direct providers (own key)</text>
+  <text class="s" x="56" y="582">Gemini · Groq · local OpenAI-compatible server</text>
+  <text class="s" x="56" y="600">(9Router, Ollama, LM Studio). Called from the PC,</text>
+  <text class="s" x="56" y="618">so the cloud backend never sees those keys.</text>
+  <text class="s" x="56" y="640">Local-only mode blocks everything except these.</text>
+
+  <!-- ===== Cloud zone ===== -->
+  <rect class="zone" x="520" y="60" width="660" height="610" rx="12"/>
+  <text class="zone-title" x="540" y="86">Cloud (managed platform, HTTPS only)</text>
+
+  <rect class="api" x="540" y="104" width="310" height="318" rx="10"/>
+  <text class="t" x="556" y="130">API service (Node.js + Express)</text>
+  <text class="s" x="556" y="148">Render web service or Google Cloud Run · stateless</text>
+  <text class="step" x="556" y="180">1  security headers (helmet) + per-IP rate limit</text>
+  <text class="step" x="556" y="204">2  verify Firebase ID token (revocation checked)</text>
+  <text class="step" x="556" y="228">3  per-user rate limit</text>
+  <text class="step" x="556" y="252">4  validate body · image type by magic bytes · size</text>
+  <text class="step" x="556" y="276">5  check the model can read images</text>
+  <text class="step" x="556" y="300">6  reserve daily quota (Firestore transaction)</text>
+  <text class="step" x="556" y="324">7  stream the provider's answer back as SSE</text>
+  <text class="step" x="556" y="348">8  record token counts (never content)</text>
+  <text class="s" x="556" y="380">Abort upstream on client disconnect · 90 s timeout</text>
+  <text class="s" x="556" y="400">Scales out: no local state besides a rate-limit cache</text>
+
+  <rect class="svc" x="900" y="104" width="260" height="92" rx="10"/>
+  <text class="t" x="916" y="130">Firebase Authentication</text>
+  <text class="s" x="916" y="150">email + password · short-lived ID tokens</text>
+  <text class="s" x="916" y="168">signed JWTs · revocation · disabled users</text>
+
+  <rect class="svc" x="900" y="214" width="260" height="124" rx="10"/>
+  <text class="t" x="916" y="240">Cloud Firestore</text>
+  <text class="s" x="916" y="260">usage/{uid}_{day}: counters only</text>
+  <text class="s" x="916" y="278">atomic quota transactions</text>
+  <text class="s" x="916" y="296">security rules: deny every client</text>
+  <text class="s" x="916" y="314">(only the backend's admin access)</text>
+
+  <rect class="ext" x="900" y="356" width="260" height="92" rx="10"/>
+  <text class="t" x="916" y="382">Google Gemini API</text>
+  <text class="s" x="916" y="402">vision + streaming + web grounding</text>
+  <text class="s" x="916" y="420">key lives only in the server's secrets</text>
+
+  <rect class="ext" x="900" y="466" width="260" height="70" rx="10"/>
+  <text class="t" x="916" y="492">Optional: any OpenAI-compatible</text>
+  <text class="s" x="916" y="512">model service (9Router, OpenRouter, …)</text>
+
+  <rect class="svc" x="540" y="440" width="310" height="92" rx="10"/>
+  <text class="t" x="556" y="466">Secrets and configuration</text>
+  <text class="s" x="556" y="486">Gemini key · service-account key (or none on</text>
+  <text class="s" x="556" y="504">Cloud Run: platform credentials) · limits.</text>
+  <text class="s" x="556" y="522">Environment secrets, never in the repo or client.</text>
+
+  <rect class="svc" x="540" y="550" width="310" height="104" rx="10"/>
+  <text class="t" x="556" y="576">Logging and monitoring</text>
+  <text class="s" x="556" y="596">structured JSON per request: request id, user id,</text>
+  <text class="s" x="556" y="614">model, outcome, first-token and total latency.</text>
+  <text class="s" x="556" y="632">No prompts, screenshots or tokens are logged.</text>
+
+  <!-- ===== Flows ===== -->
+  <!-- main process -> API -->
+  <path class="lineb" d="M400 462 H470 V160 H540" marker-end="url(#arrowBlue)"/>
+  <!-- API -> main process (stream) -->
+  <path class="lineb" stroke-dasharray="6 4" d="M540 400 H490 V482 H400" marker-end="url(#arrowBlue)"/>
+  <!-- main process -> Firebase Auth (sign in) -->
+  <path class="line" d="M400 440 H455 V48 H1030 V104" marker-end="url(#arrow)"/>
+  <!-- API -> Auth -->
+  <path class="line" d="M850 150 H900" marker-end="url(#arrow)"/>
+  <!-- API -> Firestore -->
+  <path class="line" d="M850 276 H900" marker-end="url(#arrow)"/>
+  <!-- API -> Gemini -->
+  <path class="line" d="M850 402 H900" marker-end="url(#arrow)"/>
+  <!-- API -> optional provider -->
+  <path class="line" d="M850 420 H870 V501 H900" marker-end="url(#arrow)"/>
+
+  <!-- numbered flow badges -->
+  <circle class="num" cx="470" cy="300" r="11"/><text class="numt" x="470" y="304">1</text>
+  <circle class="num" cx="490" cy="440" r="11"/><text class="numt" x="490" y="444">2</text>
+  <circle class="num" cx="455" cy="120" r="11"/><text class="numt" x="455" y="124">0</text>
+  <circle class="num" cx="875" cy="150" r="11"/><text class="numt" x="875" y="154">3</text>
+  <circle class="num" cx="875" cy="276" r="11"/><text class="numt" x="875" y="280">4</text>
+  <circle class="num" cx="875" cy="402" r="11"/><text class="numt" x="875" y="406">5</text>
+
+    <text class="lbl" x="560" y="42">0  sign in: Firebase REST (email + password) → ID token + refresh token</text>
+    <text class="lbl" x="20" y="688" fill="#475569"><tspan font-weight="700" fill="#0b63ce">0</tspan> sign in   <tspan font-weight="700" fill="#0b63ce">1</tspan> POST /v1/ask over HTTPS, Bearer ID token (crop + OCR text + question)   <tspan font-weight="700" fill="#0b63ce">2</tspan> answer streamed back as Server-Sent Events (dashed)   <tspan font-weight="700" fill="#0b63ce">3</tspan> verify token   <tspan font-weight="700" fill="#0b63ce">4</tspan> quota transaction   <tspan font-weight="700" fill="#0b63ce">5</tspan> model call</text>
+</svg>

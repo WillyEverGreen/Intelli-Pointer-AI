@@ -10,6 +10,8 @@ services:
     startCommand: node src/server.js
     healthCheckPath: /healthz
     envVars:
+      - key: NODE_VERSION
+        value: "22"
       - key: NODE_ENV
         value: production
       - key: TRUST_PROXY

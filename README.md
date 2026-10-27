@@ -6,6 +6,8 @@ Mark anything on your Windows screen, ask an AI about it, and get a streamed ans
 - **Cloud API** (`backend/`, Node.js + Express): Firebase login check, per-user quota, request validation, AI provider routing, SSE streaming.
 - **Firebase** (free Spark plan): Authentication for users, Firestore for per-user usage counters.
 
+> **Documentation:** [Deployment guide](docs/DEPLOYMENT.md) · [Security design and threat model](docs/SECURITY.md) · [Project report](docs/REPORT.md) (PDF: `docs/IntelliPointer-Report.pdf`) · [Architecture diagram](docs/architecture.png) · CI: `.github/workflows/ci.yml`
+>
 > Developer guide for the desktop app (code layout, extending, performance budget): [`desktop/README.md`](desktop/README.md).
 
 ## Architecture
@@ -242,7 +244,9 @@ Each answer shows `capture · OCR · upload size · first token · total`. Every
 
 ```bash
 cd backend && npm test                        # validation + auth enforcement (13 tests)
-cd desktop && npm test                        # SSE parser
+cd backend && npm run test:emulator           # REAL Firebase Auth + Firestore emulators: tokens, atomic quotas, rules, SSE (13 tests; needs Java 21+)
+cd backend && npm run verify:deployment -- --url https://<your-api> --firebase-key <key> --email <e> --password <p>   # checks a live deployment, writes evidence
+cd desktop && npm test                        # SSE parser + compiled native helper
 cd desktop && npx electron test/overlay.e2e.js   # overlay: drawing, move, undo, blur, crops at 1.5x DPI
 cd desktop && npx electron test/ui.e2e.js        # panel, model menu, settings tabs, commands, Ask bar (IP_THEME=dark|light, IP_GPU=on for screenshots)
 cd desktop && npx electron test/providers.e2e.js # key encryption, URL rules, local/OpenAI path; live Gemini/Groq if GEMINI_API_KEY / GROQ_API_KEY set

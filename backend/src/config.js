@@ -30,6 +30,11 @@ export const config = {
     projectId: env.FIREBASE_PROJECT_ID || '',
     // Service account JSON, either raw JSON or base64. Enables Firestore quotas.
     serviceAccountJson: env.FIREBASE_SERVICE_ACCOUNT_JSON || '',
+    // Use the platform's own credentials (Google Cloud Run / GCE metadata,
+    // `gcloud auth application-default login`) instead of a key file. This is
+    // the most secure option: there is no long-lived secret to leak.
+    // Cloud Run sets K_SERVICE automatically.
+    useAdc: bool(env.FIRESTORE_USE_ADC, Boolean(env.K_SERVICE)),
   },
 
   // Local development escape hatch. Refused in production and on non-loopback hosts.

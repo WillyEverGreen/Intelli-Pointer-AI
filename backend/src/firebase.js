@@ -20,8 +20,9 @@ export function initFirebase() {
     ...(serviceAccount ? { credential: cert(serviceAccount) } : {}),
   });
   // ID-token verification only needs the project ID (public signing keys).
-  // Firestore needs a service account credential.
-  if (serviceAccount) firestore = getFirestore(app);
+  // Firestore needs credentials: a service account key, the platform's own
+  // credentials (Cloud Run), or the local emulator (no credentials).
+  if (serviceAccount || config.firebase.useAdc || process.env.FIRESTORE_EMULATOR_HOST) firestore = getFirestore(app);
 }
 
 export function firebaseAuth() {
