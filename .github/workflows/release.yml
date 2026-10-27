@@ -31,6 +31,13 @@ jobs:
           [ "$v" = "${GITHUB_REF_NAME}" ] || { echo "Tag ${GITHUB_REF_NAME} does not match package.json ($v)"; exit 1; }
       - run: npm run check
       - run: npm test
+      # Create the release first: electron-builder uploads files in parallel and,
+      # without an existing release, can split them across two draft releases.
+      - name: Create the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "${GITHUB_REF_NAME}" --title "IntelliPointer AI ${GITHUB_REF_NAME#v}" --generate-notes
       - run: npm run release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -57,7 +57,8 @@
       {
         "provider": "github",
         "owner": "WillyEverGreen",
-        "repo": "Intelli-Pointer-AI"
+        "repo": "Intelli-Pointer-AI",
+        "releaseType": "release"
       }
     ],
     "win": {
