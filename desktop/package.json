@@ -11,6 +11,7 @@
     "test": "node --test test/*.test.js",
     "icons": "node scripts/build-icons.js",
     "report": "electron ../docs/tools/build-report.js",
+    "latex": "node ../docs/tools/build-latex.js && node ../docs/tools/check-latex.js",
     "diagrams": "electron ../docs/tools/svg-to-png.js ../docs/architecture.svg ../docs/sequence.svg",
     "app:build": "node scripts/install-app.mjs --build-only",
     "app:install": "node scripts/install-app.mjs"

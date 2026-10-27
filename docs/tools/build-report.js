@@ -33,7 +33,12 @@ app.whenReady().then(async () => {
     const data = fs.readFileSync(path.join(docs, file)).toString('base64');
     return `![${alt}](data:image/png;base64,${data})`;
   });
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>IntelliPointer AI report</title><style>${CSS}</style></head><body>${marked.parse(md, { gfm: true })}</body></html>`;
+  // The college logo is optional: used when docs/latex/figures/frcrce-logo.png exists.
+  const logoFile = path.join(docs, 'latex', 'figures', 'frcrce-logo.png');
+  const logo = fs.existsSync(logoFile)
+    ? `<p style="text-align:center"><img style="height:90pt;margin:0 auto" src="data:image/png;base64,${fs.readFileSync(logoFile).toString('base64')}" alt="Fr. Conceicao Rodrigues College of Engineering"></p>`
+    : '';
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>IntelliPointer AI report</title><style>${CSS}</style></head><body>${logo}${marked.parse(md, { gfm: true })}</body></html>`;
   fs.writeFileSync(path.join(docs, 'IntelliPointer-Report.html'), html); // git-ignored
   const win = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });
   await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);

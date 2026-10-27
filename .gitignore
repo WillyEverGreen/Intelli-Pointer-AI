@@ -13,3 +13,13 @@ desktop/src/build-info.json
 
 # generated report HTML (the PDF is kept)
 docs/IntelliPointer-Report.html
+
+# Overleaf bundle (generated)
+docs/IntelliPointer-Report-LaTeX.zip
+docs/latex/*.aux
+docs/latex/*.log
+docs/latex/*.toc
+docs/latex/*.lof
+docs/latex/*.lot
+docs/latex/*.out
+docs/latex/main.pdf

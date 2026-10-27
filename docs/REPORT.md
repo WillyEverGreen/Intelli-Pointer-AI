@@ -5,8 +5,7 @@ Fr. Conceicao Rodrigues College of Engineering, Department of Computer Engineeri
 
 | Item | Details |
 |---|---|
-| Student name / Roll no. | _fill in_ |
-| Teammates / Roll nos. | _fill in_ |
+| Students (roll no.) | Ahamed Wafiq (10705), Sai Balkawade (10707), C. Jace Jaison (10711) |
 | Project title | IntelliPointer AI: A Screen-Aware AI Assistant on a Secure Cloud Backend |
 | Date of submission | _fill in_ |
 | Source code | _repository link_ |

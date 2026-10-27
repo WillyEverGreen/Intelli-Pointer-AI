@@ -1,0 +1,23 @@
+% Abstract (hand-written)
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+Asking an AI about something on the screen normally takes seven manual steps: take a
+screenshot, crop it, open a chatbot, paste the image, retype the context, wait, and switch
+back. IntelliPointer AI reduces this to one shortcut. A Windows application freezes the
+screen, lets the user mark one or more regions, reads the text on the PC, and shows a streamed
+answer from a vision-capable model in a small floating window, with follow-up questions that
+reuse the same screenshot.
+
+A model needs a secret key, and a key inside a desktop program can be extracted. The project
+therefore places a stateless HTTPS API in the cloud (Render or Google Cloud Run). Firebase
+Authentication identifies each user with short-lived signed tokens, and Cloud Firestore holds
+a per-user daily quota that is updated in an atomic transaction, so concurrent requests cannot
+exceed it. The model key never leaves the server, nothing the user captures or asks is stored
+or logged, and every control is covered by an automated test, including integration tests
+against the real Firebase emulators. On the test machine the overlay appears in under 40 ms
+and a finished crop is ready in about 0.2 to 0.5 s.
+
+\bigskip
+\noindent\textbf{Keywords:} cloud computing, Firebase, Firestore, serverless, Server-Sent
+Events, authentication, quota, desktop application, vision model.
+\clearpage

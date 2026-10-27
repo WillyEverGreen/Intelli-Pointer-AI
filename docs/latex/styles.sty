@@ -1,0 +1,78 @@
+% Styles for the IntelliPointer AI report (standard packages only).
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{styles}
+
+\RequirePackage[T1]{fontenc}
+\RequirePackage[utf8]{inputenc}
+\RequirePackage{lmodern}
+\RequirePackage{microtype}
+\RequirePackage[a4paper,margin=2.5cm,headheight=15pt]{geometry}
+\RequirePackage{setspace}
+\RequirePackage{xcolor}
+\RequirePackage{graphicx}
+\RequirePackage{float}
+\RequirePackage{booktabs}
+\RequirePackage{longtable}
+\RequirePackage{array}
+\RequirePackage[table]{xcolor}
+\RequirePackage{enumitem}
+\RequirePackage{caption}
+\RequirePackage{listings}
+\RequirePackage{fancyhdr}
+\RequirePackage{titlesec}
+\RequirePackage{tocloft}
+\RequirePackage[hidelinks]{hyperref}
+
+% Colours (the accent matches the application's blue)
+\definecolor{accent}{HTML}{0B63CE}
+\definecolor{tblhead}{HTML}{E8EEF7}
+\definecolor{codebg}{HTML}{F5F6F8}
+
+\hypersetup{colorlinks=true,linkcolor=accent,urlcolor=accent,citecolor=accent,
+  pdftitle={IntelliPointer AI: A Screen-Aware AI Assistant on a Secure Cloud Backend},
+  pdfauthor={Ahamed Wafiq, Sai Balkawade, C. Jace Jaison}}
+\graphicspath{{figures/}}
+
+% Text
+\onehalfspacing
+\setlength{\parindent}{1cm}
+\setlength{\parskip}{0pt}
+\setlist{itemsep=2pt,topsep=4pt}
+\setlength{\LTpre}{8pt}
+\setlength{\LTpost}{10pt}
+\renewcommand{\arraystretch}{1.2}
+\captionsetup{font=small,labelfont={bf,color=accent},labelsep=period,justification=raggedright,singlelinecheck=false}
+\captionsetup[longtable]{skip=4pt}
+
+% Headings
+\titleformat{\chapter}[display]{\sffamily\bfseries\color{accent}}{\Large Chapter \thechapter}{6pt}{\Huge}
+\titlespacing*{\chapter}{0pt}{0pt}{26pt}
+\titleformat{\section}{\sffamily\Large\bfseries}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\sffamily\large\bfseries}{\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}{\sffamily\normalsize\bfseries}{\thesubsubsection}{0.7em}{}
+\titlespacing*{\section}{0pt}{18pt}{8pt}
+\titlespacing*{\subsection}{0pt}{14pt}{6pt}
+
+% Header and footer
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\sffamily IntelliPointer AI}
+\fancyhead[R]{\small\sffamily\nouppercase{\leftmark}}
+\fancyfoot[C]{\small\sffamily\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\small\sffamily\thepage}\renewcommand{\headrulewidth}{0pt}}
+
+% List of figures / tables: dotted leaders, labelled entries
+\renewcommand{\cftdotsep}{4}
+\renewcommand{\cftfigpresnum}{\bfseries Figure }
+\cftsetindents{figure}{0em}{5.5em}
+\renewcommand{\cfttabpresnum}{\bfseries Table }
+\cftsetindents{table}{0em}{5.5em}
+
+% Code
+\lstset{basicstyle=\ttfamily\footnotesize,backgroundcolor=\color{codebg},frame=single,
+  rulecolor=\color{black!15},breaklines=true,columns=fullflexible,keepspaces=true,
+  aboveskip=8pt,belowskip=8pt,xleftmargin=0pt,showstringspaces=false}
+
+\newcommand{\todo}[1]{\textcolor{red}{[#1]}}
+\endinput
