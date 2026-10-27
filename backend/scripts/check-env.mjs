@@ -37,8 +37,8 @@ else bad('FIREBASE_PROJECT_ID', 'not set');
 const key = env.GEMINI_API_KEY || '';
 if (!key) {
   bad('GEMINI_API_KEY', 'empty. Create a new key at https://aistudio.google.com/apikey and paste it into backend/.env');
-} else if (!/^AIza[0-9A-Za-z_-]{35}$/.test(key)) {
-  bad('GEMINI_API_KEY', `does not look like a Gemini key (length ${key.length})`);
+} else if (/s/.test(key) || key.length < 20) {
+  bad('GEMINI_API_KEY', 'contains spaces or is too short to be a key');
 } else {
   try {
     const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=1', {
