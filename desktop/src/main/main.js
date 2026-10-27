@@ -627,6 +627,9 @@ async function runSmokeTest(outFile) {
   }));
   report.privateMB = report.breakdown.reduce((n, p) => n + p.privateMB, 0);
   check(`idle CPU ${report.idleCpuPercent}% (under 2%)`, report.idleCpuPercent < 2);
+  // Saved credentials survive updates: report whether they could be read back (never their values).
+  const keyStatus = secrets.status();
+  report.saved = { secureStorage: auth.status().secureStorage, signedIn: auth.status().signedIn, providerKeys: Object.keys(keyStatus).filter((n) => keyStatus[n].set) };
   report.build = buildInfo();
   require('node:fs').writeFileSync(outFile, JSON.stringify(report, null, 2));
   app.exit(report.ok ? 0 : 1);
