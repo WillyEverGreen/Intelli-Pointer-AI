@@ -12,7 +12,7 @@ window.IPSettingsView = ({ cleanErr, onSaved }) => {
   const $ = (id) => document.getElementById(id);
   const PROVS = ['gemini', 'groq', 'local'];
   const SOURCES = ['gemini', 'groq', 'local'];
-  const FIELDS = ['defaultAction', 'localOnly', 'autoUpdate', 'ocrEnabled', 'selectionBubble', 'maxTurns', 'hardwareAcceleration'];
+  const FIELDS = ['defaultAction', 'localOnly', 'autoUpdate', 'launchAtLogin', 'ocrEnabled', 'selectionBubble', 'maxTurns', 'hardwareAcceleration'];
 
   let settings = {};
   let status = null; // { providers, keys } from main

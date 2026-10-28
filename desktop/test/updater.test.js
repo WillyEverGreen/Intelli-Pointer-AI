@@ -17,3 +17,8 @@ test('release builds publish to GitHub Releases', () => {
   assert.strictEqual(pkg.build.publish[0].provider, 'github');
   assert.match(pkg.build.win.artifactName, /^[^ ]+$/, 'artifact names must not contain spaces (GitHub renames them, breaking latest.yml)');
 });
+
+test('the installed app starts with Windows, quietly in the tray', () => {
+  assert.match(main, /setLoginItemSettings\(\{ openAtLogin: Boolean\(settings\.get\(\)\.launchAtLogin\), args: \['--background'\] \}\)/);
+  assert.match(main, /if \(!BACKGROUND_START\) showPanel\(/);
+});

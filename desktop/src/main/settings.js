@@ -23,6 +23,7 @@ const DEFAULTS = {
   defaultAction: 'explain',
   localOnly: false,
   autoUpdate: true,
+  launchAtLogin: true,
   ocrEnabled: true,
   maskOutside: true,
   maxTurns: 10,

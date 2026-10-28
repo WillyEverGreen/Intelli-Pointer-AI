@@ -50,6 +50,8 @@ const SMOKE_TEST_OUT = (process.argv.find((a) => a.startsWith('--smoke-test=')) 
 // The smoke test may run while the user's copy is open, so it skips the lock.
 // A second launch just shows the running copy's panel (see "second-instance")
 // and exits at once, before creating windows or touching the shortcuts.
+// Started by Windows at sign-in: stay in the tray, don't pop the panel open.
+const BACKGROUND_START = process.argv.includes('--background');
 const isPrimary = Boolean(SMOKE_TEST_OUT) || app.requestSingleInstanceLock();
 if (!isPrimary) {
   app.exit(0);
@@ -478,6 +480,17 @@ function handlePanel(channel, fn) {
   });
 }
 
+// Start with Windows, so the shortcuts work without opening the app first.
+// Only the installed build registers itself (a dev run would register electron.exe).
+function applyLoginItem() {
+  if (!app.isPackaged) return;
+  try {
+    app.setLoginItemSettings({ openAtLogin: Boolean(settings.get().launchAtLogin), args: ['--background'] });
+  } catch (err) {
+    log('login-item.error', { error: err.message });
+  }
+}
+
 function registerIpc() {
   ipcMain.on('overlay:shown', () => capture.onOverlayShown());
   ipcMain.on('overlay:confirm', (e, payload) => capture.onOverlayConfirm(e.sender, payload));
@@ -515,6 +528,7 @@ function registerIpc() {
   handlePanel('open:diagnostics', () => shell.showItemInFolder(logFile()));
   handlePanel('settings:update', (_e, patch) => {
     const next = settings.update(patch);
+    applyLoginItem();
     const failed = registerHotkeys();
     selection.setWatching(next.selectionBubble);
     if (!next.selectionBubble) hideBubble();
@@ -691,7 +705,8 @@ app.whenReady().then(async () => {
   if (failed.length) {
     new Notification({ title: 'IntelliPointer', body: `Shortcut already used by another app: ${failed.join(', ')}. Change it in Settings.` }).show();
   }
-  showPanel({ focus: true }); // first launch: show the panel so users find settings
+  applyLoginItem();
+  if (!BACKGROUND_START) showPanel({ focus: true }); // opened by hand: show the panel so users find settings
 });
 
 app.on('second-instance', () => showPanel({ focus: true }));
