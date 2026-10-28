@@ -35,7 +35,7 @@ app.whenReady().then(async () => {
 
   // Key storage is encrypted at rest
   await secrets.set('groq', 'gsk_test_secret_value_1234');
-  const raw = fs.readFileSync(path.join(app.getPath('userData'), 'provider-keys.bin'));
+  const raw = fs.readFileSync(path.join(app.getPath('userData'), 'provider-keys.dpapi'));
   check(!raw.toString('latin1').includes('gsk_test_secret_value'), 'API keys are not stored in plain text');
   check(secrets.status().groq.hint === '…1234', 'renderer-facing status only exposes the last 4 characters');
   await secrets.set('groq', '');

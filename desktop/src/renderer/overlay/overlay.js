@@ -116,6 +116,14 @@
     return { x: op.x, y: op.y, w: op.w, h: op.h };
   }
 
+  // Marks are the drawn annotations that say "look here": pen, arrow and highlight.
+  const MARKS = ['pen', 'arrow', 'highlight'];
+  function markBox(op) {
+    if (op.type === 'arrow') return { x: Math.min(op.x1, op.x2), y: Math.min(op.y1, op.y2), w: Math.abs(op.x2 - op.x1), h: Math.abs(op.y2 - op.y1) };
+    return bboxOf(op);
+  }
+  const overlaps = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+
   function normBox(x1, y1, x2, y2, square) {
     let w = x2 - x1;
     let h = y2 - y1;
@@ -507,9 +515,35 @@
         }
       }
       let regs = regions();
-      if (!regs.length) regs = [{ type: 'region', shape: 'rect', x: 0, y: 0, w: innerWidth, h: innerHeight }];
+      const wholeScreen = !regs.length;
+      if (wholeScreen) regs = [{ type: 'region', shape: 'rect', x: 0, y: 0, w: innerWidth, h: innerHeight }];
+      const marks = ops.filter((o) => MARKS.includes(o.type));
       const out = [];
-      for (const r of regs) out.push(await cropRegion(r));
+      for (const r of regs) {
+        const crop = await cropRegion(r);
+        crop.marked = marks.some((m) => overlaps(markBox(m), bboxOf(r))); // the model is told to focus on marks
+        out.push(crop);
+      }
+      // Marks with no region around them: also send a close-up of what was marked, so the
+      // model sees the area at readable size instead of a small circle on a full screen.
+      if (wholeScreen && marks.length) {
+        const boxes = marks.map(markBox);
+        const x1 = Math.min(...boxes.map((b) => b.x));
+        const y1 = Math.min(...boxes.map((b) => b.y));
+        const x2 = Math.max(...boxes.map((b) => b.x + b.w));
+        const y2 = Math.max(...boxes.map((b) => b.y + b.h));
+        const pad = Math.max(60, 0.3 * Math.max(x2 - x1, y2 - y1));
+        const fx = Math.max(0, x1 - pad);
+        const fy = Math.max(0, y1 - pad);
+        const fw = Math.min(innerWidth, x2 + pad) - fx;
+        const fh = Math.min(innerHeight, y2 + pad) - fy;
+        if (fw * fh < 0.7 * innerWidth * innerHeight) {
+          const focus = await cropRegion({ type: 'region', shape: 'rect', x: fx, y: fy, w: fw, h: fh });
+          focus.marked = true;
+          focus.focus = true;
+          out.push(focus);
+        }
+      }
       window.overlay.confirm({ regions: out, action });
     } finally {
       confirming = false;

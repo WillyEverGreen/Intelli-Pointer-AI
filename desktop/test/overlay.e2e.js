@@ -160,6 +160,27 @@ app.whenReady().then(async () => {
     check(Buffer.from(r1.png).subarray(1, 4).toString() === 'PNG', 'crop is a PNG');
     payload.regions.forEach((r, i) => fs.writeFileSync(path.join(outDir, `region-${i + 1}.png`), Buffer.from(r.png)));
   }
+  // Marks without a region: the whole screen is sent, plus a close-up of what was marked.
+  win.webContents.send('overlay:show', { scaleFactor: scale });
+  await wait(100);
+  win.webContents.send('overlay:frame', { width: pw, height: ph, bitmap: syntheticBitmap(pw, ph) });
+  await wait(250);
+  win.focus();
+  await key(wc, 'P');
+  await drag(wc, 700, 400, 780, 470); // a small pen scribble, nowhere near a region
+  const confirmed2 = new Promise((r) => ipcMain.once('overlay:confirm', (_e, p) => r(p)));
+  await key(wc, 'Return');
+  const marked = await Promise.race([confirmed2, wait(5000).then(() => null)]);
+  check(Boolean(marked), 'a marked screen can be confirmed without drawing a region');
+  if (marked) {
+    check(marked.regions.length === 2, `whole screen + close-up of the marks (got ${marked.regions.length})`);
+    const [full, focus] = marked.regions;
+    check(full.marked === true && !full.focus, 'the full-screen image is flagged as containing marks');
+    check(focus?.focus === true && focus.marked === true, 'the second image is the zoomed marked area');
+    check(focus && focus.width < full.width && focus.height < full.height, `the close-up is smaller than the screen (${focus?.width}x${focus?.height})`);
+    check(focus && focus.bbox.x <= 700 && focus.bbox.x + focus.bbox.width >= 780 && focus.bbox.y <= 400 && focus.bbox.y + focus.bbox.height >= 470, 'the close-up contains the whole mark');
+  }
+
   check(consoleErrors.length === 0, `no renderer console errors ${consoleErrors.join(' | ')}`);
 
   console.log(failures.length ? `\n${failures.length} FAILED` : '\nALL PASSED');

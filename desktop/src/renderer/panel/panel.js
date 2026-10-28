@@ -78,7 +78,11 @@
       errors = [{ source: 'Models', message: cleanErr(err) }];
     }
     modelMenu.setModels(models, modelMenu.value || settings.defaultModel);
-    if (!models.length) {
+    let keyProblem = '';
+    try { keyProblem = (await window.ip.providerStatus()).keyProblem || ''; } catch { /* ignore */ }
+    if (keyProblem) {
+      banner(keyProblem, { label: 'Settings', onClick: openSettings });
+    } else if (!models.length) {
       const why = errors.length ? errors.map((e) => `${e.source}: ${e.message}`).join(' ') : 'Add a Gemini or Groq key, or a local server, to choose models.';
       banner(why, { label: 'Settings', onClick: openSettings });
     } else if (errors.length) {
@@ -188,7 +192,7 @@
   window.ip.onContext((d) => {
     if (d.mode === 'append' && context) {
       const offset = context.images.length;
-      context.images.push(...d.images.map((img, i) => ({ ...img, label: `Region ${offset + i + 1}` })));
+      context.images.push(...d.images.map((img, i) => ({ ...img, label: img.focus ? img.label : `Region ${offset + i + 1}` })));
       context.ocr = { status: 'pending', text: context.ocr.text, confidence: context.ocr.confidence };
       context.pendingId = d.contextId;
     } else {
@@ -263,7 +267,11 @@
       if (context.clipText) extra.push(`[Selected text]\n${context.clipText}`);
       if (useOcr && context.ocr.text) extra.push(`[OCR text from the selected region(s), may contain recognition errors]\n${context.ocr.text}`);
       const images = useImages ? context.images.map((img) => ({ mime: img.mime, data: img.base64 })) : [];
-      if (images.length > 1) extra.push(`[${images.length} screen regions attached, in order: ${context.images.map((im) => im.label).join(', ')}]`);
+      if (images.length > 1) extra.push(`[${images.length} images attached, in order: ${context.images.map((im) => im.label).join(', ')}]`);
+      if (images.length && context.images.some((im) => im.marked)) {
+        extra.push('[The user drew marks (circles, arrows or highlights) on the screen. Focus your answer on the marked area'
+          + (context.images.some((im) => im.focus) ? '; the image labelled "Marked area (zoomed)" is a close-up of it' : '') + '.]');
+      }
       return { role: 'user', text: [t.text, ...extra].join('\n\n'), images };
     });
   }
@@ -309,7 +317,7 @@
 
     const reqId = `r${Date.now()}`;
     const body = { model: m.id, messages: buildMessages(useImages, useOcr), webSearch: webSearch && m.webSearch };
-    current = { reqId, wrap, bubble, text: '', question, sources: [], opts: { cacheable, webSearch } };
+    current = { reqId, wrap, bubble, text: '', question, sources: [], opts: { cacheable, webSearch }, sentImages: useImages };
     bubble.classList.add('streaming');
     bubble.innerHTML = `<span class="status">${useImages ? 'Uploading and waiting for a response…' : 'Waiting for a response…'}</span>`;
     setBusy(true);
@@ -433,6 +441,13 @@
           ol.appendChild(li);
         }
         bubble.appendChild(ol);
+      }
+      // Some routes drop images silently. If the model says it got none although we sent one, say so.
+      if (current.sentImages && text.length < 700 && /(?:\b(?:no|not|without|missing)\b|n't)[^.]{0,60}\b(?:image|screenshot|picture|attachment|attached)/i.test(text)) {
+        const note = document.createElement('div');
+        note.className = 'meta';
+        note.textContent = 'The image was sent, but this model says it did not receive it. Try another model, or leave "Send OCR text" on so the text still gets through.';
+        bubble.appendChild(note);
       }
       turns.push({ role: 'assistant', text });
       const ct = data.clientTimings || {};

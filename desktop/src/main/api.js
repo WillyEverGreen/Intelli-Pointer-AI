@@ -1,6 +1,7 @@
 const crypto = require('node:crypto');
 const settings = require('./settings');
 const providers = require('./providers');
+const secrets = require('./secrets');
 
 // Model client: streams answers from the direct providers (providers.js). Runs
 // in the main process so API keys never reach a renderer, and requests are not
@@ -12,6 +13,7 @@ const CACHE_MAX = 100;
 
 // All selectable models: the direct providers the user configured.
 async function listModels() {
+  await secrets.whenLoaded();
   return { models: providers.listModels(), errors: [] };
 }
 

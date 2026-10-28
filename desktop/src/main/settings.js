@@ -4,7 +4,7 @@ const { app } = require('electron');
 const commands = require('./commands');
 
 // Non-secret user preferences, stored as JSON in the app's userData folder.
-// Secrets live elsewhere, encrypted with safeStorage: provider API keys in
+// Secrets live elsewhere, encrypted with Windows DPAPI: provider API keys in
 // secrets.js.
 
 const PROVIDER_IDS = ['gemini', 'groq', 'local'];

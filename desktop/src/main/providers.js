@@ -10,6 +10,8 @@ const { createSseParser } = require('./sse');
 const SYSTEM_PROMPT = [
   'You are IntelliPointer, an assistant that answers questions about content the user selected on their screen.',
   'Attached images are cropped screen regions, labelled in order as Region 1, Region 2, ... when there are several.',
+  'If the user drew marks on an image (circles, arrows, highlights, pen strokes), the marked area is what they are asking about: focus on it and use the rest only as context. An image labelled "Marked area (zoomed)" is a close-up of that area.',
+  'An image is always attached to the same message as these instructions. Never say that no image was attached unless the message really contains no image part; if you cannot read an image, say that instead.',
   'Text marked "OCR text" was extracted locally and may contain recognition errors; trust the image when they disagree.',
   'Be concise and direct. Use Markdown. Put code in fenced blocks with a language tag.',
 ].join(' ');
@@ -84,6 +86,7 @@ function keyFor(provider, override) {
 // Lists the provider's chat models. `opts` may carry an unsaved key/baseUrl
 // typed in Settings so the user can test before saving.
 async function fetchModels(provider, opts = {}) {
+  await secrets.whenLoaded();
   if (!DEFS[provider]) throw new ProviderError('Unknown provider.');
   const key = keyFor(provider, opts.apiKey);
   const signal = AbortSignal.timeout(15000);
@@ -125,6 +128,7 @@ async function fetchModels(provider, opts = {}) {
 
 // Time to first token for one model with a tiny prompt (used by "Test speed").
 async function speedTest(provider, model, opts = {}) {
+  await secrets.whenLoaded();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
   const t0 = performance.now();
@@ -168,6 +172,7 @@ function listModels() {
 
 // Streams one answer. Yields { type: 'delta' | 'sources' | 'usage', ... }.
 async function* stream({ modelId, messages, webSearch, signal, override = {} }) {
+  await secrets.whenLoaded();
   const sep = modelId.indexOf(':');
   const provider = modelId.slice(0, sep);
   const model = modelId.slice(sep + 1);

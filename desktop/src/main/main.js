@@ -45,6 +45,12 @@ app.commandLine.appendSwitch('disable-features', [
 if (process.env.IP_GPU !== 'on' && !settings.get().hardwareAcceleration) app.disableHardwareAcceleration();
 Menu.setApplicationMenu(null); // no default menu: less memory and startup work
 
+// Windows 10 or 11 only: the screen capture, selection helper and tray behaviour are Windows-specific.
+if (process.platform !== 'win32' || Number.parseInt(require('node:os').release(), 10) < 10) {
+  require('electron').dialog.showErrorBox('IntelliPointer AI', 'IntelliPointer AI needs Windows 10 or Windows 11.');
+  app.exit(1);
+}
+
 const SMOKE_TEST_OUT = (process.argv.find((a) => a.startsWith('--smoke-test=')) || '').slice('--smoke-test='.length);
 
 // The smoke test may run while the user's copy is open, so it skips the lock.
@@ -335,7 +341,14 @@ async function startCapture(mode = 'replace', presetAction = null) {
   const bbox = { x: union.x1, y: union.y1, width: union.x2 - union.x1, height: union.y2 - union.y1 };
 
   // Show the panel straight away with thumbnails; OCR text follows.
-  const attachments = regions.map((r, i) => ({ label: `Region ${i + 1}`, width: r.width, height: r.height, ...toAttachment(r.png) }));
+  const attachments = regions.map((r, i) => ({
+    label: r.focus ? 'Marked area (zoomed)' : `Region ${i + 1}`,
+    marked: Boolean(r.marked),
+    focus: Boolean(r.focus),
+    width: r.width,
+    height: r.height,
+    ...toAttachment(r.png),
+  }));
   const contextId = `ctx-${Date.now()}`;
   panel.webContents.send('context:add', {
     contextId, mode, kind: 'screen', images: attachments, action: result.action || presetAction || null,
@@ -343,7 +356,7 @@ async function startCapture(mode = 'replace', presetAction = null) {
   });
   showPanel({ focus: !result.action, bbox });
 
-  const o = await runOcr(regions);
+  const o = await runOcr(regions.filter((r) => !r.focus)); // the close-up repeats text already in the full region
   panel.webContents.send('context:ocr', { contextId, text: o.text, confidence: o.confidence, error: o.error || null, ocrMs: o.ms });
 }
 
@@ -535,7 +548,10 @@ function registerIpc() {
     return { settings: next, hotkeyErrors: failed };
   });
   handlePanel('models:list', () => api.listModels());
-  handlePanel('providers:status', () => ({ providers: settings.get().providers, keys: secrets.status() }));
+  handlePanel('providers:status', async () => {
+    await secrets.whenLoaded();
+    return { providers: settings.get().providers, keys: secrets.status(), keyProblem: secrets.problem() };
+  });
   handlePanel('providers:fetchModels', (_e, provider, opts) => providers.fetchModels(String(provider), {
     apiKey: typeof opts?.apiKey === 'string' ? opts.apiKey.trim() : undefined,
     baseUrl: typeof opts?.baseUrl === 'string' ? opts.baseUrl.trim() : undefined,
@@ -551,7 +567,7 @@ function registerIpc() {
       if (typeof patch?.[name]?.apiKey === 'string') await secrets.set(name, patch[name].apiKey);
     }
     settings.update({ providers: patch || {} });
-    return { providers: settings.get().providers, keys: secrets.status() };
+    return { providers: settings.get().providers, keys: secrets.status(), keyProblem: secrets.problem() };
   });
   handlePanel('update:status', () => updater.getState());
   handlePanel('update:check', () => updater.check({ manual: true }));
@@ -665,8 +681,9 @@ async function runSmokeTest(outFile) {
   report.privateMB = report.breakdown.reduce((n, p) => n + p.privateMB, 0);
   check(`idle CPU ${report.idleCpuPercent}% (under 2%)`, report.idleCpuPercent < 2);
   // Saved credentials survive updates: report whether they could be read back (never their values).
+  await secrets.whenLoaded();
   const keyStatus = secrets.status();
-  report.saved = { secureStorage: require('electron').safeStorage.isEncryptionAvailable(), providerKeys: Object.keys(keyStatus).filter((n) => keyStatus[n].set) };
+  report.saved = { providerKeys: Object.keys(keyStatus).filter((n) => keyStatus[n].set) };
   report.build = buildInfo();
   require('node:fs').writeFileSync(outFile, JSON.stringify(report, null, 2));
   app.exit(report.ok ? 0 : 1);
@@ -680,7 +697,7 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionCheckHandler(() => false);
   // An earlier version kept an encrypted cloud sign-in token here; nothing uses it now.
   try { require('node:fs').rmSync(path.join(app.getPath('userData'), 'session.bin'), { force: true }); } catch { /* ignore */ }
-  await secrets.load();
+  secrets.load(); // in the background; everything that needs a key waits for it
   if (SMOKE_TEST_OUT) {
     createPanel();
     createBubble();
